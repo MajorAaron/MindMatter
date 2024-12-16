@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Welcome to Firebase Hosting</title>
+
+    <!-- update the version number as needed -->
+    <script defer src="/__/firebase/11.1.0/firebase-app-compat.js"></script>
+    <!-- include only the Firebase features as you need -->
+    <script defer src="/__/firebase/11.1.0/firebase-auth-compat.js"></script>
+    <script defer src="/__/firebase/11.1.0/firebase-database-compat.js"></script>
+    <script defer src="/__/firebase/11.1.0/firebase-firestore-compat.js"></script>
+    <script defer src="/__/firebase/11.1.0/firebase-functions-compat.js"></script>
+    <script defer src="/__/firebase/11.1.0/firebase-messaging-compat.js"></script>
+    <script defer src="/__/firebase/11.1.0/firebase-storage-compat.js"></script>
+    <script defer src="/__/firebase/11.1.0/firebase-analytics-compat.js"></script>
+    <script defer src="/__/firebase/11.1.0/firebase-remote-config-compat.js"></script>
+    <script defer src="/__/firebase/11.1.0/firebase-performance-compat.js"></script>
+    <!-- 
+      initialize the SDK after all desired features are loaded, set useEmulator to false
+      to avoid connecting the SDK to running emulators.
+    -->
+    <script defer src="/__/firebase/init.js"></script>
+
+    <script>
+        // Check if we're running locally
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        
+        if (isLocalhost) {
+            // Connect to Firebase emulators when running locally
+            window.connectToEmulators = function(app) {
+                app.firestore().useEmulator('localhost', 8080);
+                app.functions().useEmulator('localhost', 5001);
+            }
+        } else {
+            window.connectToEmulators = function(app) {
+                // Do nothing in production
+            }
+        }
+    </script>
+
+    <style media="screen">
+      body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f8f9fa;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .collection-input {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        input {
+            width: 200px;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        button {
+            background: #4285f4;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .document-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 24px;
+            padding: 20px 0;
+        }
+
+        .document-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            transition: transform 0.2s;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .document-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .card-image {
+            width: 100%;
+            height: 200px;
+            background-color: #e9ecef;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .card-content {
+            padding: 16px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0 0 12px 0;
+            color: #1a1a1a;
+            line-height: 1.4;
+        }
+
+        .card-excerpt {
+            font-size: 14px;
+            color: #666;
+            margin: 0 0 16px 0;
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .card-source {
+            font-size: 13px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: auto;
+            padding-top: 12px;
+            border-top: 1px solid #eee;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            text-transform: capitalize;
+            background: #e9ecef;
+        }
+
+        .status-badge.unread {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .status-badge.read {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .options-button {
+            background: none;
+            border: none;
+            padding: 4px 8px;
+            cursor: pointer;
+            color: #666;
+            font-size: 18px;
+        }
+
+        .options-button:hover {
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        .error {
+            color: #dc3545;
+            padding: 16px;
+            border-radius: 8px;
+            background: #f8d7da;
+            margin-top: 20px;
+        }
+
+        .source-info {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .source-icon {
+            width: 16px;
+            height: 16px;
+            object-fit: contain;
+        }
+
+        .options-menu {
+            position: absolute;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            padding: 8px 0;
+            min-width: 150px;
+            z-index: 1000;
+            display: none;
+        }
+
+        .options-menu.show {
+            display: block;
+        }
+
+        .options-menu-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #333;
+        }
+
+        .options-menu-item:hover {
+            background-color: #f5f5f5;
+        }
+
+        .options-menu-item.delete {
+            color: #dc3545;
+        }
+
+        .delete-icon {
+            width: 16px;
+            height: 16px;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .modal-title {
+            margin: 0 0 16px 0;
+            font-size: 20px;
+        }
+
+        .modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .btn-cancel {
+            background: #e9ecef;
+            color: #333;
+        }
+
+        .btn-delete {
+            background: #dc3545;
+        }
+
+        .btn-delete:hover {
+            background: #c82333;
+        }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+        <div class="header">
+            <h1>Saved Articles</h1>
+            <div class="collection-input">
+                <input type="text" id="collection" placeholder="Collection name" value="saved_articles">
+                <button onclick="loadDocuments()">Load Documents</button>
+            </div>
+        </div>
+
+        <div id="documents" class="document-grid"></div>
+        <p id="load" style="display: none;">Firebase SDK Loading&hellip;</p>
+    </div>
+
+    <script>
+          document.addEventListener('DOMContentLoaded', function() {
+        const loadEl = document.querySelector('#load');
+        
+        try {
+          let app = firebase.app();
+          // Connect to emulators if running locally
+          connectToEmulators(app);
+
+          let features = [
+            'auth', 
+            'database', 
+            'firestore',
+            'functions',
+            'messaging', 
+            'storage', 
+            'analytics', 
+            'remoteConfig',
+            'performance',
+          ].filter(feature => typeof app[feature] === 'function');
+          if (loadEl) {
+            loadEl.textContent = `Firebase SDK loaded with ${features.join(', ')}`;
+          }
+            runListing(app)
+
+        } catch (e) {
+          console.error(e);
+          if (loadEl) {
+            loadEl.textContent = 'Error loading the Firebase SDK, check the console.';
+          }
+        }
+      });
+
+      function runListing(app) {
+    // Use the passed app instance instead of reinitializing
+    const db = firebase.firestore();  // Get Firestore instance from the initialized app
+
+    // Function to format the date
+    function formatDate(dateString) {
+        // ... (keep existing formatDate function)
+    }
+
+    // Keep getFaviconUrl function
+    function getFaviconUrl(url) {
+        // ... (keep existing getFaviconUrl function)
+    }
+
+    async function loadDocuments() {
+        const collectionName = document.getElementById('collection').value;
+        const documentsDiv = document.getElementById('documents');
+        documentsDiv.innerHTML = 'Loading...';
+
+        try {
+            const snapshot = await db.collection(collectionName).get();
+            
+            if (snapshot.empty) {
+                documentsDiv.innerHTML = 'No documents found in collection.';
+                return;
+            }
+
+            documentsDiv.innerHTML = '';
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                const card = document.createElement('div');
+                card.className = 'document-card';
+                
+                // Create card HTML
+                card.innerHTML = `
+                    ${data.topImage ? `
+                        <div class="card-image" style="background-image: url('${data.topImage}')"></div>
+                    ` : ''}
+                    <div class="card-content">
+                        <h2 class="card-title">
+                            <a href="${data.url}" target="_blank" rel="noopener noreferrer">
+                                ${data.title || 'Untitled'}
+                            </a>
+                        </h2>
+                        <p class="card-excerpt">${data.excerpt || 'No excerpt available'}</p>
+                        <div class="card-source">
+                            <div class="source-info">
+                                ${data.source ? `
+                                    <img class="source-icon" src="https://www.google.com/s2/favicons?domain=${data.source}" alt="${data.source} icon">
+                                    <span>${data.source}</span>
+                                ` : ''}
+                            </div>
+                            <span class="status-badge ${data.status}">${data.status}</span>
+                            <button class="options-button" onclick="showOptions('${doc.id}', event)">⋮</button>
+                        </div>
+                    </div>
+                `;
+                
+                documentsDiv.appendChild(card);
+            });
+        } catch (error) {
+            showError('Error loading documents: ' + error.message);
+            console.error('Full error:', error);
+        }
+    }
+
+    function showOptions(docId, event) {
+        event.stopPropagation();
+        
+        // Remove any existing options menu
+        const existingMenu = document.querySelector('.options-menu');
+        if (existingMenu) {
+            existingMenu.remove();
+        }
+        
+        const menu = document.createElement('div');
+        menu.className = 'options-menu show';
+        menu.innerHTML = `
+            <div class="options-menu-item" onclick="handleMarkAsRead('${docId}')">
+                Mark as Read
+            </div>
+            <div class="options-menu-item delete" onclick="handleDelete('${docId}')">
+                Delete
+            </div>
+        `;
+        
+        // Position the menu near the click
+        menu.style.position = 'absolute';
+        menu.style.top = `${event.pageY}px`;
+        menu.style.left = `${event.pageX}px`;
+        
+        document.body.appendChild(menu);
+        
+        // Close menu when clicking outside
+        document.addEventListener('click', function closeMenu(e) {
+            if (!menu.contains(e.target) && !e.target.matches('.options-button')) {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            }
+        });
+    }
+
+    async function handleMarkAsRead(docId) {
+        try {
+            const collectionName = document.getElementById('collection').value;
+            await db.collection(collectionName).doc(docId).update({
+                status: 'read'
+            });
+            loadDocuments();
+        } catch (error) {
+            console.error('Error marking as read:', error);
+            showError('Error marking as read: ' + error.message);
+        }
+    }
+
+    async function handleDelete(docId) {
+        if (confirm('Are you sure you want to delete this item?')) {
+            try {
+                const collectionName = document.getElementById('collection').value;
+                await db.collection(collectionName).doc(docId).delete();
+                loadDocuments();
+            } catch (error) {
+                console.error('Error deleting document:', error);
+                showError('Error deleting document: ' + error.message);
+            }
+        }
+    }
+
+    function showError(message) {
+        const documentsDiv = document.getElementById('documents');
+        documentsDiv.innerHTML = `<div class="error">${message}</div>`;
+    }
+
+    // Load documents automatically on page load
+    window.onload = () => loadDocuments();
+}
+    </script>
+  </body>
+</html>

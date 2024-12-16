@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Add Pocket Item - Test Page</title>
+
+    <!-- Firebase SDKs -->
+    <script defer src="/__/firebase/11.1.0/firebase-app-compat.js"></script>
+    <script defer src="/__/firebase/11.1.0/firebase-functions-compat.js"></script>
+    <script defer src="/__/firebase/init.js"></script>
+
+    <script>
+        // Check if we're running locally
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const FUNCTIONS_BASE_URL = isLocalhost 
+            ? 'http://127.0.0.1:5001/mindmatter-bfd38/us-central1'
+            : 'https://us-central1-mindmatter-bfd38.cloudfunctions.net';
+    </script>
+
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        h1 {
+            margin: 0 0 24px 0;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+
+        button {
+            background: #4285f4;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        button:hover {
+            background: #3367d6;
+        }
+
+        .response {
+            margin-top: 20px;
+            padding: 16px;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+        }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            border: 1px solid #ffcdd2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Add Pocket Item</h1>
+        <form id="pocketForm" onsubmit="submitForm(event)">
+            <div class="form-group">
+                <label for="given_url">URL *</label>
+                <input type="url" id="given_url" required>
+            </div>
+
+            <div class="form-group">
+                <label for="given_title">Title</label>
+                <input type="text" id="given_title">
+            </div>
+
+            <div class="form-group">
+                <label for="excerpt">Excerpt</label>
+                <textarea id="excerpt"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="top_image_url">Top Image URL</label>
+                <input type="url" id="top_image_url">
+            </div>
+
+            <div class="form-group">
+                <label for="source">Source</label>
+                <input type="text" id="source">
+            </div>
+
+            <div class="form-group">
+                <label for="time_added">Time Added</label>
+                <input type="number" id="time_added" value="">
+            </div>
+
+            <button type="submit">Add Item</button>
+        </form>
+
+        <div id="response" class="response"></div>
+    </div>
+
+    <script>
+        // Set default time_added to current Unix timestamp
+        document.getElementById('time_added').value = Math.floor(Date.now() / 1000);
+
+        async function submitForm(event) {
+            event.preventDefault();
+            
+            const responseDiv = document.getElementById('response');
+            responseDiv.style.display = 'none';
+            responseDiv.className = 'response';
+
+            const data = {
+                given_url: document.getElementById('given_url').value,
+                given_title: document.getElementById('given_title').value,
+                excerpt: document.getElementById('excerpt').value,
+                top_image_url: document.getElementById('top_image_url').value,
+                source: document.getElementById('source').value,
+                time_added: document.getElementById('time_added').value
+            };
+
+            try {
+                const response = await fetch(`${FUNCTIONS_BASE_URL}/save_item_to_db`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                    },
+                    mode: 'cors',
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+                
+                responseDiv.style.display = 'block';
+                if (response.ok) {
+                    responseDiv.classList.add('success');
+                    responseDiv.textContent = `Success! Document ID: ${result.docId}`;
+                } else {
+                    responseDiv.classList.add('error');
+                    responseDiv.textContent = `Error: ${result.error || 'Unknown error occurred'}`;
+                }
+            } catch (error) {
+                responseDiv.style.display = 'block';
+                responseDiv.classList.add('error');
+                responseDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html> 
