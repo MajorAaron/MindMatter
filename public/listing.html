@@ -266,9 +266,20 @@
                     if (!data.topImage) {
                         fetch(`${functionsBaseUrl}/fetch_article_image?url=${encodeURIComponent(data.url)}`)
                             .then(response => response.json())
-                            .then(data => {
-                                if (data.imageUrl) {
-                                    setBackgroundImage(data.imageUrl);
+                            .then(async (imageData) => {
+                                if (imageData.imageUrl) {
+                                    // Set the background image immediately
+                                    setBackgroundImage(imageData.imageUrl);
+                                    
+                                    // Store the image URL back to Firestore
+                                    try {
+                                        await db.collection(collectionName).doc(doc.id).update({
+                                            topImage: imageData.imageUrl
+                                        });
+                                        console.log('Image URL stored in Firestore');
+                                    } catch (error) {
+                                        console.error('Error storing image URL:', error);
+                                    }
                                 }
                             })
                             .catch(console.error);
