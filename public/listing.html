@@ -24,19 +24,399 @@
     <script defer src="/__/firebase/init.js"></script>
 
     <script>
-        // Check if we're running locally
+        // Check if we're running locally and which emulators are available
         const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         
-        if (isLocalhost) {
-            // Connect to Firebase emulators when running locally
-            window.connectToEmulators = function(app) {
-                app.firestore().useEmulator('localhost', 8080);
-                app.functions().useEmulator('localhost', 5001);
+        // Add a global variable for the functions base URL
+        let functionsBaseUrl;
+        
+        async function checkEmulatorAvailability(port) {
+            try {
+                const response = await fetch(`http://localhost:${port}`, { method: 'HEAD' });
+                return true;
+            } catch (error) {
+                return false;
             }
-        } else {
-            window.connectToEmulators = function(app) {
-                // Do nothing in production
+        }
+
+        // Update the connectToEmulators function
+        window.connectToEmulators = async function(app) {
+            if (isLocalhost) {
+                // Check if Functions emulator is running
+                const isFunctionsEmulatorRunning = await checkEmulatorAvailability(5001);
+                if (isFunctionsEmulatorRunning) {
+                    console.log('Connecting to Functions emulator');
+                    app.functions().useEmulator('localhost', 5001);
+                    functionsBaseUrl = 'http://localhost:5001/mindmatter-bfd38/us-central1';
+                } else {
+                    functionsBaseUrl = 'https://us-central1-mindmatter-bfd38.cloudfunctions.net';
+                }
+
+                // Check if Firestore emulator is running
+                const isFirestoreEmulatorRunning = await checkEmulatorAvailability(8080);
+                if (isFirestoreEmulatorRunning) {
+                    console.log('Connecting to Firestore emulator');
+                    app.firestore().useEmulator('localhost', 8080);
+                }
+            } else {
+                functionsBaseUrl = 'https://us-central1-mindmatter-bfd38.cloudfunctions.net';
             }
+        }
+
+        // Declare both app and db in the wider scope
+        let app, db;
+
+        document.addEventListener('DOMContentLoaded', async function() {
+            const loadEl = document.querySelector('#load');
+            
+            try {
+                app = firebase.app();
+                // Connect to emulators if running locally
+                await connectToEmulators(app);
+                db = firebase.firestore();  // Initialize db here
+
+                let features = [
+                    'auth', 
+                    'database', 
+                    'firestore',
+                    'functions',
+                    'messaging', 
+                    'storage', 
+                    'analytics', 
+                    'remoteConfig',
+                    'performance',
+                ].filter(feature => typeof app[feature] === 'function');
+                
+                if (loadEl) {
+                    loadEl.textContent = `Firebase SDK loaded with ${features.join(', ')}`;
+                }
+                
+                runListing(app);
+            } catch (e) {
+                console.error(e);
+                if (loadEl) {
+                    loadEl.textContent = 'Error loading the Firebase SDK, check the console.';
+                }
+            }
+        });
+
+        function getSourceInfo(url) {
+            // Map of known services and their icons/names
+            const knownServices = {
+                'netflix.com': {
+                    icon: 'https://assets.nflxext.com/us/ffe/siteui/common/icons/nficon2016.ico',
+                    name: 'Netflix'
+                },
+                'facebook.com': {
+                    icon: 'https://static.xx.fbcdn.net/rsrc.php/yD/r/d4ZIVX-5C-b.ico',
+                    name: 'Facebook'
+                },
+                'spotify.com': {
+                    icon: 'https://open.scdn.co/cdn/images/favicon.5cb2bd30.ico',
+                    name: 'Spotify'
+                },
+                'drive.google.com': {
+                    icon: 'https://ssl.gstatic.com/docs/doclist/images/drive_2022q3_32dp.png',
+                    name: 'Google Drive'
+                },
+                'docs.google.com': {
+                    icon: 'https://ssl.gstatic.com/docs/documents/images/kix-favicon7.ico',
+                    name: 'Google Docs'
+                },
+                'nytimes.com': {
+                    icon: 'https://www.nytimes.com/vi-assets/static-assets/favicon-d2483f10ef688e6f89e23806b9700298.ico',
+                    name: 'The New York Times'
+                }
+            };
+
+            try {
+                // Try to parse the URL
+                const urlObj = new URL(url);
+                const domain = urlObj.hostname.toLowerCase().replace(/^www\./, '');
+                
+                // Check for known services
+                for (const [serviceDomain, serviceInfo] of Object.entries(knownServices)) {
+                    if (domain.includes(serviceDomain)) {
+                        return {
+                            icon: serviceInfo.icon,
+                            name: serviceInfo.name,
+                            domain: domain
+                        };
+                    }
+                }
+
+                // Fallback to Google Favicon service for unknown services
+                return {
+                    icon: `https://www.google.com/s2/favicons?domain=${domain}&sz=32`,
+                    name: domain,
+                    domain: domain
+                };
+            } catch (error) {
+                // If URL parsing fails, try to clean up the source string
+                const cleanSource = url.toLowerCase().replace(/^www\./, '');
+                return {
+                    icon: `https://www.google.com/s2/favicons?domain=${cleanSource}&sz=32`,
+                    name: cleanSource,
+                    domain: cleanSource
+                };
+            }
+        }
+
+        // Add this function to extract domain from URL
+        function extractDomain(url) {
+            try {
+                // Try to parse the URL
+                const urlObj = new URL(url);
+                return urlObj.hostname.toLowerCase().replace(/^www\./, '');
+            } catch {
+                // If URL parsing fails, return the original string cleaned up
+                return url.toLowerCase().replace(/^www\./, '');
+            }
+        }
+
+        function showOptions(docId, event) {
+            event.stopPropagation();
+            
+            // Remove any existing options menu
+            const existingMenu = document.querySelector('.options-menu');
+            if (existingMenu) {
+                // If clicking the same button that opened the current menu, just close it
+                const currentButtonDocId = existingMenu.getAttribute('data-doc-id');
+                if (currentButtonDocId === docId) {
+                    existingMenu.remove();
+                    return;
+                }
+                // Otherwise, remove the existing menu before showing the new one
+                existingMenu.remove();
+            }
+            
+            const menu = document.createElement('div');
+            menu.className = 'options-menu show';
+            menu.setAttribute('data-doc-id', docId); // Add this to track which button opened the menu
+            menu.innerHTML = `
+                <div class="options-menu-item delete" onclick="handleDelete('${docId}')">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                    </svg>
+                    Delete
+                </div>
+            `;
+            
+            // Position the menu near the click
+            const buttonRect = event.target.getBoundingClientRect();
+            menu.style.position = 'fixed';
+            menu.style.top = `${buttonRect.bottom + 5}px`;
+            menu.style.left = `${buttonRect.left - 100}px`; // Offset to align with button
+            
+            document.body.appendChild(menu);
+            
+            // Close menu when clicking outside
+            document.addEventListener('click', function closeMenu(e) {
+                if (!menu.contains(e.target) && !e.target.matches('.options-button')) {
+                    menu.remove();
+                    document.removeEventListener('click', closeMenu);
+                }
+            });
+        }
+
+        // Add constant for collection name
+        const COLLECTION_NAME = 'saved_articles';
+
+        // Move loadDocuments to global scope
+        async function loadDocuments() {
+            const collectionName = COLLECTION_NAME;
+            const documentsDiv = document.getElementById('documents');
+            documentsDiv.innerHTML = 'Loading...';
+
+            try {
+                const snapshot = await db.collection(collectionName).get();
+                
+                if (snapshot.empty) {
+                    documentsDiv.innerHTML = 'No documents found in collection.';
+                    return;
+                }
+
+                documentsDiv.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const card = document.createElement('div');
+                    card.className = 'document-card';
+                    card.setAttribute('data-doc-id', doc.id);
+                    
+                    // Create placeholder for image
+                    const imageContainer = document.createElement('div');
+                    imageContainer.className = 'card-image';
+                    
+                    // Function to set background image
+                    const setBackgroundImage = (url) => {
+                        if (url) {
+                            imageContainer.style.backgroundImage = `url('${url}')`;
+                        }
+                    };
+                    
+                    // Try to use topImage first
+                    if (data.topImage) {
+                        setBackgroundImage(data.topImage);
+                    }
+                    
+                    // Append the image container to the card first
+                    card.appendChild(imageContainer);
+                    
+                    // If no topImage or it fails to load, try to fetch one
+                    if (!data.topImage) {
+                        fetch(`${functionsBaseUrl}/fetch_article_image?url=${encodeURIComponent(data.url)}`)
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.imageUrl) {
+                                    setBackgroundImage(data.imageUrl);
+                                }
+                            })
+                            .catch(console.error);
+                    }
+                    
+                    // Create content container
+                    const contentContainer = document.createElement('div');
+                    contentContainer.className = 'card-content';
+                    
+                    // Create card HTML
+                    contentContainer.innerHTML = `
+                        <h2 class="card-title">
+                            <a href="${data.url}" target="_blank" rel="noopener noreferrer">
+                                ${data.title || 'Untitled'}
+                            </a>
+                        </h2>
+                        <p class="card-excerpt">${data.excerpt || 'No excerpt available'}</p>
+                        ${data.tags ? `
+                            <div class="tags-container">
+                                ${typeof data.tags === 'string' 
+                                    ? data.tags.split(',')
+                                        .map(tag => tag.trim())
+                                        .filter(tag => tag)
+                                        .map(tag => `
+                                            <span class="tag-badge">${tag}</span>
+                                        `).join('')
+                                    : Array.isArray(data.tags) 
+                                        ? data.tags
+                                            .filter(tag => tag && tag.trim())
+                                            .map(tag => `
+                                                <span class="tag-badge">${tag.trim()}</span>
+                                            `).join('')
+                                        : ''
+                                }
+                            </div>
+                        ` : ''}
+                        <div class="card-source">
+                            <div class="source-info">
+                                ${data.url ? `
+                                    ${(() => {
+                                        const domain = extractDomain(data.url);
+                                        return `
+                                            <img class="source-icon" 
+                                                src="https://www.google.com/s2/favicons?domain=${domain}&sz=32" 
+                                                alt="${domain} icon"
+                                                onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>';">
+                                            <span>${domain}</span>
+                                        `;
+                                    })()}
+                                ` : ''}
+                            </div>
+                            <div class="card-metadata">
+                                <span class="timestamp">${formatTimestamp(data.time)}</span>
+                                <button class="options-button" onclick="showOptions('${doc.id}', event)">⋮</button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Append the content container to the card
+                    card.appendChild(contentContainer);
+                    
+                    documentsDiv.appendChild(card);
+                });
+            } catch (error) {
+                showError('Error loading documents: ' + error.message);
+                console.error('Full error:', error);
+            }
+        }
+
+        function runListing(app) {
+            // Load documents immediately
+            loadDocuments();
+        }
+
+        async function handleDelete(docId) {
+            try {
+                if (!db) {
+                    throw new Error('Database not initialized');
+                }
+                const collectionName = COLLECTION_NAME;
+                await db.collection(collectionName).doc(docId).delete();
+                
+                // Find and remove the card from DOM
+                const card = document.querySelector(`.document-card[data-doc-id="${docId}"]`);
+                if (card) {
+                    card.remove();
+                }
+                
+                // Remove any open options menu
+                const menu = document.querySelector('.options-menu');
+                if (menu) {
+                    menu.remove();
+                }
+                
+            } catch (error) {
+                console.error('Error deleting document:', error);
+                showError('Error deleting document: ' + error.message);
+            }
+        }
+
+        function showError(message) {
+            const documentsDiv = document.getElementById('documents');
+            documentsDiv.innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        // Add this function near the top with other utility functions
+        function searchDocuments(searchTerm) {
+            const cards = document.querySelectorAll('.document-card');
+            const normalizedSearch = searchTerm.toLowerCase().trim();
+            
+            cards.forEach(card => {
+                const title = card.querySelector('.card-title').textContent.toLowerCase();
+                const excerpt = card.querySelector('.card-excerpt').textContent.toLowerCase();
+                const tags = Array.from(card.querySelectorAll('.tag-badge'))
+                    .map(tag => tag.textContent.toLowerCase());
+                const source = card.querySelector('.source-info span')?.textContent.toLowerCase() || '';
+                
+                // Check if any of the card content matches the search term
+                const matches = title.includes(normalizedSearch) ||
+                    excerpt.includes(normalizedSearch) ||
+                    tags.some(tag => tag.includes(normalizedSearch)) ||
+                    source.includes(normalizedSearch);
+                
+                // Show/hide the card based on match
+                card.style.display = matches ? 'flex' : 'none';
+            });
+        }
+
+        // Add this utility function near the top with other utility functions
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return '';
+            
+            // Convert string timestamp to number and then to milliseconds
+            const timestampNum = parseInt(timestamp, 10);
+            if (isNaN(timestampNum)) return '';
+            
+            const date = new Date(timestampNum * 1000);
+            
+            // Format to Mountain Time
+            return date.toLocaleString('en-US', {
+                timeZone: 'America/Denver',
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
         }
     </script>
 
@@ -59,6 +439,8 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 20px;
         }
 
         .collection-input {
@@ -152,24 +534,6 @@
             border-top: 1px solid #eee;
         }
 
-        .status-badge {
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            text-transform: capitalize;
-            background: #e9ecef;
-        }
-
-        .status-badge.unread {
-            background: #e3f2fd;
-            color: #1976d2;
-        }
-
-        .status-badge.read {
-            background: #e8f5e9;
-            color: #2e7d32;
-        }
-
         .options-button {
             background: none;
             border: none;
@@ -177,6 +541,7 @@
             cursor: pointer;
             color: #666;
             font-size: 18px;
+            position: relative;
         }
 
         .options-button:hover {
@@ -196,21 +561,32 @@
             display: flex;
             align-items: center;
             gap: 6px;
+            font-size: 13px;
+            color: #666;
         }
 
         .source-icon {
             width: 16px;
             height: 16px;
             object-fit: contain;
+            border-radius: 3px;
+            vertical-align: middle;
+        }
+
+        .source-info span {
+            max-width: 150px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .options-menu {
-            position: absolute;
+            position: fixed;
             background: white;
             border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.15);
             padding: 8px 0;
-            min-width: 150px;
+            min-width: 120px;
             z-index: 1000;
             display: none;
         }
@@ -226,6 +602,7 @@
             align-items: center;
             gap: 8px;
             color: #333;
+            font-size: 14px;
         }
 
         .options-menu-item:hover {
@@ -236,7 +613,7 @@
             color: #dc3545;
         }
 
-        .delete-icon {
+        .options-menu-item svg {
             width: 16px;
             height: 16px;
         }
@@ -286,191 +663,84 @@
         .btn-delete:hover {
             background: #c82333;
         }
+
+        .tags-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .tag-badge {
+            background: #e9ecef;
+            color: #495057;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: lowercase;
+        }
+
+        .search-container {
+            flex: 1;
+            max-width: 400px;
+        }
+
+        .search-container input {
+            width: 100%;
+            padding: 10px 16px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .search-container input:focus {
+            outline: none;
+            border-color: #4285f4;
+            box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
+        }
+
+        @media (max-width: 600px) {
+            .header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .search-container {
+                max-width: none;
+            }
+        }
+
+        .card-metadata {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .timestamp {
+            font-size: 12px;
+            color: #666;
+            white-space: nowrap;
+        }
     </style>
   </head>
   <body>
     <div class="container">
         <div class="header">
             <h1>Saved Articles</h1>
-            <div class="collection-input">
-                <input type="text" id="collection" placeholder="Collection name" value="saved_articles">
-                <button onclick="loadDocuments()">Load Documents</button>
+            <div class="search-container">
+                <input 
+                    type="text" 
+                    id="searchInput" 
+                    placeholder="Search articles..."
+                    oninput="searchDocuments(this.value)"
+                >
             </div>
         </div>
 
         <div id="documents" class="document-grid"></div>
         <p id="load" style="display: none;">Firebase SDK Loading&hellip;</p>
     </div>
-
-    <script>
-          document.addEventListener('DOMContentLoaded', function() {
-        const loadEl = document.querySelector('#load');
-        
-        try {
-          let app = firebase.app();
-          // Connect to emulators if running locally
-          connectToEmulators(app);
-
-          let features = [
-            'auth', 
-            'database', 
-            'firestore',
-            'functions',
-            'messaging', 
-            'storage', 
-            'analytics', 
-            'remoteConfig',
-            'performance',
-          ].filter(feature => typeof app[feature] === 'function');
-          if (loadEl) {
-            loadEl.textContent = `Firebase SDK loaded with ${features.join(', ')}`;
-          }
-            runListing(app)
-
-        } catch (e) {
-          console.error(e);
-          if (loadEl) {
-            loadEl.textContent = 'Error loading the Firebase SDK, check the console.';
-          }
-        }
-      });
-
-      function runListing(app) {
-    // Use the passed app instance instead of reinitializing
-    const db = firebase.firestore();  // Get Firestore instance from the initialized app
-
-    // Function to format the date
-    function formatDate(dateString) {
-        // ... (keep existing formatDate function)
-    }
-
-    // Keep getFaviconUrl function
-    function getFaviconUrl(url) {
-        // ... (keep existing getFaviconUrl function)
-    }
-
-    async function loadDocuments() {
-        const collectionName = document.getElementById('collection').value;
-        const documentsDiv = document.getElementById('documents');
-        documentsDiv.innerHTML = 'Loading...';
-
-        try {
-            const snapshot = await db.collection(collectionName).get();
-            
-            if (snapshot.empty) {
-                documentsDiv.innerHTML = 'No documents found in collection.';
-                return;
-            }
-
-            documentsDiv.innerHTML = '';
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                const card = document.createElement('div');
-                card.className = 'document-card';
-                
-                // Create card HTML
-                card.innerHTML = `
-                    ${data.topImage ? `
-                        <div class="card-image" style="background-image: url('${data.topImage}')"></div>
-                    ` : ''}
-                    <div class="card-content">
-                        <h2 class="card-title">
-                            <a href="${data.url}" target="_blank" rel="noopener noreferrer">
-                                ${data.title || 'Untitled'}
-                            </a>
-                        </h2>
-                        <p class="card-excerpt">${data.excerpt || 'No excerpt available'}</p>
-                        <div class="card-source">
-                            <div class="source-info">
-                                ${data.source ? `
-                                    <img class="source-icon" src="https://www.google.com/s2/favicons?domain=${data.source}" alt="${data.source} icon">
-                                    <span>${data.source}</span>
-                                ` : ''}
-                            </div>
-                            <span class="status-badge ${data.status}">${data.status}</span>
-                            <button class="options-button" onclick="showOptions('${doc.id}', event)">⋮</button>
-                        </div>
-                    </div>
-                `;
-                
-                documentsDiv.appendChild(card);
-            });
-        } catch (error) {
-            showError('Error loading documents: ' + error.message);
-            console.error('Full error:', error);
-        }
-    }
-
-    function showOptions(docId, event) {
-        event.stopPropagation();
-        
-        // Remove any existing options menu
-        const existingMenu = document.querySelector('.options-menu');
-        if (existingMenu) {
-            existingMenu.remove();
-        }
-        
-        const menu = document.createElement('div');
-        menu.className = 'options-menu show';
-        menu.innerHTML = `
-            <div class="options-menu-item" onclick="handleMarkAsRead('${docId}')">
-                Mark as Read
-            </div>
-            <div class="options-menu-item delete" onclick="handleDelete('${docId}')">
-                Delete
-            </div>
-        `;
-        
-        // Position the menu near the click
-        menu.style.position = 'absolute';
-        menu.style.top = `${event.pageY}px`;
-        menu.style.left = `${event.pageX}px`;
-        
-        document.body.appendChild(menu);
-        
-        // Close menu when clicking outside
-        document.addEventListener('click', function closeMenu(e) {
-            if (!menu.contains(e.target) && !e.target.matches('.options-button')) {
-                menu.remove();
-                document.removeEventListener('click', closeMenu);
-            }
-        });
-    }
-
-    async function handleMarkAsRead(docId) {
-        try {
-            const collectionName = document.getElementById('collection').value;
-            await db.collection(collectionName).doc(docId).update({
-                status: 'read'
-            });
-            loadDocuments();
-        } catch (error) {
-            console.error('Error marking as read:', error);
-            showError('Error marking as read: ' + error.message);
-        }
-    }
-
-    async function handleDelete(docId) {
-        if (confirm('Are you sure you want to delete this item?')) {
-            try {
-                const collectionName = document.getElementById('collection').value;
-                await db.collection(collectionName).doc(docId).delete();
-                loadDocuments();
-            } catch (error) {
-                console.error('Error deleting document:', error);
-                showError('Error deleting document: ' + error.message);
-            }
-        }
-    }
-
-    function showError(message) {
-        const documentsDiv = document.getElementById('documents');
-        documentsDiv.innerHTML = `<div class="error">${message}</div>`;
-    }
-
-    // Load documents automatically on page load
-    window.onload = () => loadDocuments();
-}
-    </script>
   </body>
 </html>

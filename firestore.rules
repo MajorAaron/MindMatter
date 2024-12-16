@@ -3,6 +3,12 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /saved_articles/{document=**} {
       allow read, write: if true;
+      allow list: if request.query.limit <= 100 &&
+        (
+          !request.query.filters ||
+          request.query.filters.size() == 0 ||
+          (request.query.filters.size() == 1 && 'tags' in request.query.filters)
+        );
     }
     match /{document=**} {
       allow read, write: if false;
