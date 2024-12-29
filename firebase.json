@@ -25,6 +25,10 @@
     ],
     "rewrites": [
       {
+        "source": "/email-template.js",
+        "destination": "/functions/email-template.js"
+      },
+      {
         "source": "/",
         "destination": "/listing.html"
       }
@@ -35,7 +39,7 @@
       "port": 5001
     },
     "firestore": {
-      "port": 8081
+      "port": 8080
     },
     "hosting": {
       "port": 5003

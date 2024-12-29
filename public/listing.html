@@ -3,436 +3,16 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Welcome to Firebase Hosting</title>
-
-    <!-- update the version number as needed -->
+    <title>Saved Articles</title>
+    
+    <!-- Firebase SDKs -->
     <script defer src="/__/firebase/11.1.0/firebase-app-compat.js"></script>
-    <!-- include only the Firebase features as you need -->
-    <script defer src="/__/firebase/11.1.0/firebase-auth-compat.js"></script>
-    <script defer src="/__/firebase/11.1.0/firebase-database-compat.js"></script>
     <script defer src="/__/firebase/11.1.0/firebase-firestore-compat.js"></script>
-    <script defer src="/__/firebase/11.1.0/firebase-functions-compat.js"></script>
-    <script defer src="/__/firebase/11.1.0/firebase-messaging-compat.js"></script>
-    <script defer src="/__/firebase/11.1.0/firebase-storage-compat.js"></script>
-    <script defer src="/__/firebase/11.1.0/firebase-analytics-compat.js"></script>
-    <script defer src="/__/firebase/11.1.0/firebase-remote-config-compat.js"></script>
-    <script defer src="/__/firebase/11.1.0/firebase-performance-compat.js"></script>
-    <!-- 
-      initialize the SDK after all desired features are loaded, set useEmulator to false
-      to avoid connecting the SDK to running emulators.
-    -->
     <script defer src="/__/firebase/init.js"></script>
 
-    <script>
-        // Check if we're running locally and which emulators are available
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        
-        // Add a global variable for the functions base URL
-        let functionsBaseUrl;
-        
-        async function checkEmulatorAvailability(port) {
-            try {
-                const response = await fetch(`http://localhost:${port}`, { method: 'HEAD' });
-                return true;
-            } catch (error) {
-                return false;
-            }
-        }
-
-        // Update the connectToEmulators function
-        window.connectToEmulators = async function(app) {
-            if (isLocalhost) {
-                // Check if Functions emulator is running
-                const isFunctionsEmulatorRunning = await checkEmulatorAvailability(5001);
-                if (isFunctionsEmulatorRunning) {
-                    console.log('Connecting to Functions emulator');
-                    app.functions().useEmulator('localhost', 5001);
-                    functionsBaseUrl = 'http://localhost:5001/mindmatter-bfd38/us-central1';
-                } else {
-                    functionsBaseUrl = 'https://us-central1-mindmatter-bfd38.cloudfunctions.net';
-                }
-
-                // Check if Firestore emulator is running
-                const isFirestoreEmulatorRunning = await checkEmulatorAvailability(8080);
-                if (isFirestoreEmulatorRunning) {
-                    console.log('Connecting to Firestore emulator');
-                    app.firestore().useEmulator('localhost', 8080);
-                }
-            } else {
-                functionsBaseUrl = 'https://us-central1-mindmatter-bfd38.cloudfunctions.net';
-            }
-        }
-
-        // Declare both app and db in the wider scope
-        let app, db;
-
-        document.addEventListener('DOMContentLoaded', async function() {
-            const loadEl = document.querySelector('#load');
-            
-            try {
-                app = firebase.app();
-                // Connect to emulators if running locally
-                await connectToEmulators(app);
-                db = firebase.firestore();  // Initialize db here
-
-                let features = [
-                    'auth', 
-                    'database', 
-                    'firestore',
-                    'functions',
-                    'messaging', 
-                    'storage', 
-                    'analytics', 
-                    'remoteConfig',
-                    'performance',
-                ].filter(feature => typeof app[feature] === 'function');
-                
-                if (loadEl) {
-                    loadEl.textContent = `Firebase SDK loaded with ${features.join(', ')}`;
-                }
-                
-                runListing(app);
-            } catch (e) {
-                console.error(e);
-                if (loadEl) {
-                    loadEl.textContent = 'Error loading the Firebase SDK, check the console.';
-                }
-            }
-        });
-
-        function getSourceInfo(url) {
-            // Map of known services and their icons/names
-            const knownServices = {
-                'netflix.com': {
-                    icon: 'https://assets.nflxext.com/us/ffe/siteui/common/icons/nficon2016.ico',
-                    name: 'Netflix'
-                },
-                'facebook.com': {
-                    icon: 'https://static.xx.fbcdn.net/rsrc.php/yD/r/d4ZIVX-5C-b.ico',
-                    name: 'Facebook'
-                },
-                'spotify.com': {
-                    icon: 'https://open.scdn.co/cdn/images/favicon.5cb2bd30.ico',
-                    name: 'Spotify'
-                },
-                'drive.google.com': {
-                    icon: 'https://ssl.gstatic.com/docs/doclist/images/drive_2022q3_32dp.png',
-                    name: 'Google Drive'
-                },
-                'docs.google.com': {
-                    icon: 'https://ssl.gstatic.com/docs/documents/images/kix-favicon7.ico',
-                    name: 'Google Docs'
-                },
-                'nytimes.com': {
-                    icon: 'https://www.nytimes.com/vi-assets/static-assets/favicon-d2483f10ef688e6f89e23806b9700298.ico',
-                    name: 'The New York Times'
-                }
-            };
-
-            try {
-                // Try to parse the URL
-                const urlObj = new URL(url);
-                const domain = urlObj.hostname.toLowerCase().replace(/^www\./, '');
-                
-                // Check for known services
-                for (const [serviceDomain, serviceInfo] of Object.entries(knownServices)) {
-                    if (domain.includes(serviceDomain)) {
-                        return {
-                            icon: serviceInfo.icon,
-                            name: serviceInfo.name,
-                            domain: domain
-                        };
-                    }
-                }
-
-                // Fallback to Google Favicon service for unknown services
-                return {
-                    icon: `https://www.google.com/s2/favicons?domain=${domain}&sz=32`,
-                    name: domain,
-                    domain: domain
-                };
-            } catch (error) {
-                // If URL parsing fails, try to clean up the source string
-                const cleanSource = url.toLowerCase().replace(/^www\./, '');
-                return {
-                    icon: `https://www.google.com/s2/favicons?domain=${cleanSource}&sz=32`,
-                    name: cleanSource,
-                    domain: cleanSource
-                };
-            }
-        }
-
-        // Add this function to extract domain from URL
-        function extractDomain(url) {
-            try {
-                // Try to parse the URL
-                const urlObj = new URL(url);
-                return urlObj.hostname.toLowerCase().replace(/^www\./, '');
-            } catch {
-                // If URL parsing fails, return the original string cleaned up
-                return url.toLowerCase().replace(/^www\./, '');
-            }
-        }
-
-        function showOptions(docId, event) {
-            event.stopPropagation();
-            
-            // Remove any existing options menu
-            const existingMenu = document.querySelector('.options-menu');
-            if (existingMenu) {
-                // If clicking the same button that opened the current menu, just close it
-                const currentButtonDocId = existingMenu.getAttribute('data-doc-id');
-                if (currentButtonDocId === docId) {
-                    existingMenu.remove();
-                    return;
-                }
-                // Otherwise, remove the existing menu before showing the new one
-                existingMenu.remove();
-            }
-            
-            const menu = document.createElement('div');
-            menu.className = 'options-menu show';
-            menu.setAttribute('data-doc-id', docId); // Add this to track which button opened the menu
-            menu.innerHTML = `
-                <div class="options-menu-item delete" onclick="handleDelete('${docId}')">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                    </svg>
-                    Delete
-                </div>
-            `;
-            
-            // Position the menu near the click
-            const buttonRect = event.target.getBoundingClientRect();
-            menu.style.position = 'fixed';
-            menu.style.top = `${buttonRect.bottom + 5}px`;
-            menu.style.left = `${buttonRect.left - 100}px`; // Offset to align with button
-            
-            document.body.appendChild(menu);
-            
-            // Close menu when clicking outside
-            document.addEventListener('click', function closeMenu(e) {
-                if (!menu.contains(e.target) && !e.target.matches('.options-button')) {
-                    menu.remove();
-                    document.removeEventListener('click', closeMenu);
-                }
-            });
-        }
-
-        // Add constant for collection name
-        const COLLECTION_NAME = 'saved_articles';
-
-        // Move loadDocuments to global scope
-        async function loadDocuments() {
-            const collectionName = COLLECTION_NAME;
-            const documentsDiv = document.getElementById('documents');
-            documentsDiv.innerHTML = 'Loading...';
-
-            try {
-                const snapshot = await db.collection(collectionName).get();
-                
-                if (snapshot.empty) {
-                    documentsDiv.innerHTML = 'No documents found in collection.';
-                    return;
-                }
-
-                documentsDiv.innerHTML = '';
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    const card = document.createElement('div');
-                    card.className = 'document-card';
-                    card.setAttribute('data-doc-id', doc.id);
-                    
-                    // Create placeholder for image
-                    const imageContainer = document.createElement('div');
-                    imageContainer.className = 'card-image';
-                    
-                    // Function to set background image
-                    const setBackgroundImage = (url) => {
-                        if (url) {
-                            imageContainer.style.backgroundImage = `url('${url}')`;
-                        }
-                    };
-                    
-                    // Try to use topImage first
-                    if (data.topImage) {
-                        setBackgroundImage(data.topImage);
-                    }
-                    
-                    // Append the image container to the card first
-                    card.appendChild(imageContainer);
-                    
-                    // If no topImage or it fails to load, try to fetch one
-                    if (!data.topImage) {
-                        fetch(`${functionsBaseUrl}/fetch_article_image?url=${encodeURIComponent(data.url)}`)
-                            .then(response => response.json())
-                            .then(async (imageData) => {
-                                if (imageData.imageUrl) {
-                                    // Set the background image immediately
-                                    setBackgroundImage(imageData.imageUrl);
-                                    
-                                    // Store the image URL back to Firestore
-                                    try {
-                                        await db.collection(collectionName).doc(doc.id).update({
-                                            topImage: imageData.imageUrl
-                                        });
-                                        console.log('Image URL stored in Firestore');
-                                    } catch (error) {
-                                        console.error('Error storing image URL:', error);
-                                    }
-                                }
-                            })
-                            .catch(console.error);
-                    }
-                    
-                    // Create content container
-                    const contentContainer = document.createElement('div');
-                    contentContainer.className = 'card-content';
-                    
-                    // Create card HTML
-                    contentContainer.innerHTML = `
-                        <h2 class="card-title">
-                            <a href="${data.url}" target="_blank" rel="noopener noreferrer">
-                                ${data.title || 'Untitled'}
-                            </a>
-                        </h2>
-                        <p class="card-excerpt">${data.excerpt || 'No excerpt available'}</p>
-                        ${data.tags ? `
-                            <div class="tags-container">
-                                ${typeof data.tags === 'string' 
-                                    ? data.tags.split(',')
-                                        .map(tag => tag.trim())
-                                        .filter(tag => tag)
-                                        .map(tag => `
-                                            <span class="tag-badge">${tag}</span>
-                                        `).join('')
-                                    : Array.isArray(data.tags) 
-                                        ? data.tags
-                                            .filter(tag => tag && tag.trim())
-                                            .map(tag => `
-                                                <span class="tag-badge">${tag.trim()}</span>
-                                            `).join('')
-                                        : ''
-                                }
-                            </div>
-                        ` : ''}
-                        <div class="card-source">
-                            <div class="source-info">
-                                ${data.url ? `
-                                    ${(() => {
-                                        const domain = extractDomain(data.url);
-                                        return `
-                                            <img class="source-icon" 
-                                                src="https://www.google.com/s2/favicons?domain=${domain}&sz=32" 
-                                                alt="${domain} icon"
-                                                onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>';">
-                                            <span>${domain}</span>
-                                        `;
-                                    })()}
-                                ` : ''}
-                            </div>
-                            <div class="card-metadata">
-                                <span class="timestamp">${formatTimestamp(data.time)}</span>
-                                <button class="options-button" onclick="showOptions('${doc.id}', event)">⋮</button>
-                            </div>
-                        </div>
-                    `;
-                    
-                    // Append the content container to the card
-                    card.appendChild(contentContainer);
-                    
-                    documentsDiv.appendChild(card);
-                });
-            } catch (error) {
-                showError('Error loading documents: ' + error.message);
-                console.error('Full error:', error);
-            }
-        }
-
-        function runListing(app) {
-            // Load documents immediately
-            loadDocuments();
-        }
-
-        async function handleDelete(docId) {
-            try {
-                if (!db) {
-                    throw new Error('Database not initialized');
-                }
-                const collectionName = COLLECTION_NAME;
-                await db.collection(collectionName).doc(docId).delete();
-                
-                // Find and remove the card from DOM
-                const card = document.querySelector(`.document-card[data-doc-id="${docId}"]`);
-                if (card) {
-                    card.remove();
-                }
-                
-                // Remove any open options menu
-                const menu = document.querySelector('.options-menu');
-                if (menu) {
-                    menu.remove();
-                }
-                
-            } catch (error) {
-                console.error('Error deleting document:', error);
-                showError('Error deleting document: ' + error.message);
-            }
-        }
-
-        function showError(message) {
-            const documentsDiv = document.getElementById('documents');
-            documentsDiv.innerHTML = `<div class="error">${message}</div>`;
-        }
-
-        // Add this function near the top with other utility functions
-        function searchDocuments(searchTerm) {
-            const cards = document.querySelectorAll('.document-card');
-            const normalizedSearch = searchTerm.toLowerCase().trim();
-            
-            cards.forEach(card => {
-                const title = card.querySelector('.card-title').textContent.toLowerCase();
-                const excerpt = card.querySelector('.card-excerpt').textContent.toLowerCase();
-                const tags = Array.from(card.querySelectorAll('.tag-badge'))
-                    .map(tag => tag.textContent.toLowerCase());
-                const source = card.querySelector('.source-info span')?.textContent.toLowerCase() || '';
-                
-                // Check if any of the card content matches the search term
-                const matches = title.includes(normalizedSearch) ||
-                    excerpt.includes(normalizedSearch) ||
-                    tags.some(tag => tag.includes(normalizedSearch)) ||
-                    source.includes(normalizedSearch);
-                
-                // Show/hide the card based on match
-                card.style.display = matches ? 'flex' : 'none';
-            });
-        }
-
-        // Add this utility function near the top with other utility functions
-        function formatTimestamp(timestamp) {
-            if (!timestamp) return '';
-            
-            // Convert string timestamp to number and then to milliseconds
-            const timestampNum = parseInt(timestamp, 10);
-            if (isNaN(timestampNum)) return '';
-            
-            const date = new Date(timestampNum * 1000);
-            
-            // Format to Mountain Time
-            return date.toLocaleString('en-US', {
-                timeZone: 'America/Denver',
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true
-            });
-        }
-    </script>
-
-    <style media="screen">
-      body {
+    <style>
+        /* Keep your existing styles */
+        body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             margin: 0;
             padding: 0;
@@ -450,32 +30,19 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 30px;
-            flex-wrap: wrap;
-            gap: 20px;
         }
 
-        .collection-input {
-            display: flex;
-            gap: 10px;
-            align-items: center;
+        .search-container {
+            flex: 1;
+            max-width: 400px;
         }
 
-        input {
-            width: 200px;
-            padding: 8px 12px;
+        .search-container input {
+            width: 100%;
+            padding: 10px 16px;
             border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-
-        button {
-            background: #4285f4;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
+            border-radius: 8px;
+            font-size: 16px;
         }
 
         .document-grid {
@@ -495,32 +62,22 @@
             flex-direction: column;
         }
 
-        .document-card:hover {
-            transform: translateY(-2px);
-        }
-
         .card-image {
             width: 100%;
             height: 200px;
-            background-color: #e9ecef;
             background-size: cover;
             background-position: center;
-            background-repeat: no-repeat;
         }
 
         .card-content {
             padding: 16px;
             flex: 1;
-            display: flex;
-            flex-direction: column;
         }
 
         .card-title {
             font-size: 18px;
             font-weight: 600;
             margin: 0 0 12px 0;
-            color: #1a1a1a;
-            line-height: 1.4;
         }
 
         .card-excerpt {
@@ -528,10 +85,6 @@
             color: #666;
             margin: 0 0 16px 0;
             line-height: 1.5;
-            display: -webkit-box;
-            -webkit-line-clamp: 3;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
         }
 
         .card-source {
@@ -545,194 +98,32 @@
             border-top: 1px solid #eee;
         }
 
+        .source-info {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .source-icon {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+
         .options-button {
             background: none;
             border: none;
             padding: 4px 8px;
             cursor: pointer;
             color: #666;
-            font-size: 18px;
-            position: relative;
         }
 
-        .options-button:hover {
-            background: #f5f5f5;
-            border-radius: 4px;
-        }
-
-        .error {
+        .error-message {
             color: #dc3545;
             padding: 16px;
             border-radius: 8px;
             background: #f8d7da;
             margin-top: 20px;
-        }
-
-        .source-info {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 13px;
-            color: #666;
-        }
-
-        .source-icon {
-            width: 16px;
-            height: 16px;
-            object-fit: contain;
-            border-radius: 3px;
-            vertical-align: middle;
-        }
-
-        .source-info span {
-            max-width: 150px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .options-menu {
-            position: fixed;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-            padding: 8px 0;
-            min-width: 120px;
-            z-index: 1000;
-            display: none;
-        }
-
-        .options-menu.show {
-            display: block;
-        }
-
-        .options-menu-item {
-            padding: 8px 16px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            color: #333;
-            font-size: 14px;
-        }
-
-        .options-menu-item:hover {
-            background-color: #f5f5f5;
-        }
-
-        .options-menu-item.delete {
-            color: #dc3545;
-        }
-
-        .options-menu-item svg {
-            width: 16px;
-            height: 16px;
-        }
-
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.5);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 2000;
-        }
-
-        .modal {
-            background: white;
-            border-radius: 12px;
-            padding: 24px;
-            max-width: 400px;
-            width: 90%;
-        }
-
-        .modal-title {
-            margin: 0 0 16px 0;
-            font-size: 20px;
-        }
-
-        .modal-buttons {
-            display: flex;
-            justify-content: flex-end;
-            gap: 12px;
-            margin-top: 24px;
-        }
-
-        .btn-cancel {
-            background: #e9ecef;
-            color: #333;
-        }
-
-        .btn-delete {
-            background: #dc3545;
-        }
-
-        .btn-delete:hover {
-            background: #c82333;
-        }
-
-        .tags-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-bottom: 16px;
-        }
-
-        .tag-badge {
-            background: #e9ecef;
-            color: #495057;
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 500;
-            text-transform: lowercase;
-        }
-
-        .search-container {
-            flex: 1;
-            max-width: 400px;
-        }
-
-        .search-container input {
-            width: 100%;
-            padding: 10px 16px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: border-color 0.2s, box-shadow 0.2s;
-        }
-
-        .search-container input:focus {
-            outline: none;
-            border-color: #4285f4;
-            box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
-        }
-
-        @media (max-width: 600px) {
-            .header {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .search-container {
-                max-width: none;
-            }
-        }
-
-        .card-metadata {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .timestamp {
-            font-size: 12px;
-            color: #666;
-            white-space: nowrap;
         }
     </style>
   </head>
@@ -751,7 +142,201 @@
         </div>
 
         <div id="documents" class="document-grid"></div>
-        <p id="load" style="display: none;">Firebase SDK Loading&hellip;</p>
     </div>
+    
+    <script type="module">
+        import { initializeFirestore, fetchArticles } from './js/firestore-utils.js';
+
+        // Global variables
+        let db;
+        const functionsBaseUrl = 'http://localhost:5001/mindmatter-bfd38/us-central1';
+
+        // Initialize Firestore on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                db = await initializeFirestore();
+                loadDocuments();
+            } catch (error) {
+                console.error('Error initializing Firestore:', error);
+                showError('Error initializing Firestore: ' + error.message);
+            }
+        });
+
+        // Load and display documents
+        async function loadDocuments() {
+            const documentsDiv = document.getElementById('documents');
+            documentsDiv.innerHTML = 'Loading...';
+
+            try {
+                const articles = await fetchArticles(db, {
+                    limit: 20,
+                    orderBy: 'timeAdded',
+                    orderDirection: 'desc'
+                });
+                
+                if (articles.length === 0) {
+                    documentsDiv.innerHTML = 'No documents found in collection.';
+                    return;
+                }
+
+                documentsDiv.innerHTML = '';
+                articles.forEach(article => {
+                    const card = createArticleCard(article);
+                    documentsDiv.appendChild(card);
+                });
+            } catch (error) {
+                showError('Error loading documents: ' + error.message);
+                console.error('Full error:', error);
+            }
+        }
+
+        // Helper function to create article cards
+        function createArticleCard(article) {
+            const card = document.createElement('div');
+            card.className = 'document-card';
+            card.setAttribute('data-doc-id', article.id);
+            
+            // Create image container
+            const imageContainer = document.createElement('div');
+            imageContainer.className = 'card-image';
+            
+            // Set background image if available
+            if (article.topImage) {
+                imageContainer.style.backgroundImage = `url('${article.topImage}')`;
+            } else {
+                // Try to fetch image if not available
+                fetch(`${functionsBaseUrl}/fetch_article_image?url=${encodeURIComponent(article.url)}`)
+                    .then(response => response.json())
+                    .then(async (imageData) => {
+                        if (imageData.imageUrl) {
+                            imageContainer.style.backgroundImage = `url('${imageData.imageUrl}')`;
+                            try {
+                                await db.collection('saved_articles').doc(article.id).update({
+                                    topImage: imageData.imageUrl
+                                });
+                                console.log('Image URL stored in Firestore');
+                            } catch (error) {
+                                console.error('Error storing image URL:', error);
+                            }
+                        }
+                    })
+                    .catch(console.error);
+            }
+            
+            card.appendChild(imageContainer);
+            
+            // Create content container
+            const contentContainer = document.createElement('div');
+            contentContainer.className = 'card-content';
+            
+            // Create card HTML
+            contentContainer.innerHTML = `
+                <h2 class="card-title">
+                    <a href="${article.url}" target="_blank" rel="noopener noreferrer">
+                        ${article.title || 'Untitled'}
+                    </a>
+                </h2>
+                <p class="card-excerpt">${article.excerpt || 'No excerpt available'}</p>
+                ${article.tags ? `
+                    <div class="tags-container">
+                        ${typeof article.tags === 'string' 
+                            ? article.tags.split(',')
+                                .map(tag => tag.trim())
+                                .filter(tag => tag)
+                                .map(tag => `
+                                    <span class="tag-badge">${tag}</span>
+                                `).join('')
+                            : Array.isArray(article.tags) 
+                                ? article.tags
+                                    .filter(tag => tag && tag.trim())
+                                    .map(tag => `
+                                        <span class="tag-badge">${tag.trim()}</span>
+                                    `).join('')
+                                : ''
+                        }
+                    </div>
+                ` : ''}
+                <div class="card-source">
+                    <div class="source-info">
+                        ${article.url ? `
+                            ${(() => {
+                                const domain = extractDomain(article.url);
+                                return `
+                                    <img class="source-icon" 
+                                        src="https://www.google.com/s2/favicons?domain=${domain}&sz=32" 
+                                        alt="${domain} icon"
+                                        onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>';">
+                                    <span>${domain}</span>
+                                `;
+                            })()}
+                        ` : ''}
+                    </div>
+                    <div class="card-metadata">
+                        <span class="timestamp">${formatTimestamp(article.time)}</span>
+                        <button class="options-button" onclick="showOptions('${article.id}', event)">⋮</button>
+                    </div>
+                </div>
+            `;
+            
+            card.appendChild(contentContainer);
+            return card;
+        }
+
+        // Helper functions
+        function extractDomain(url) {
+            try {
+                const urlObj = new URL(url);
+                return urlObj.hostname.replace('www.', '');
+            } catch {
+                return 'Unknown Source';
+            }
+        }
+
+        function formatTimestamp(time) {
+            if (!time) return '';
+            const date = new Date(time._seconds * 1000);
+            return date.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
+
+        function showError(message) {
+            const documentsDiv = document.getElementById('documents');
+            documentsDiv.innerHTML = `<div class="error-message">${message}</div>`;
+        }
+
+        // Make search function available globally
+        window.searchDocuments = function(searchTerm) {
+            const cards = document.querySelectorAll('.document-card');
+            const normalizedSearch = searchTerm.toLowerCase().trim();
+            
+            cards.forEach(card => {
+                const title = card.querySelector('.card-title').textContent.toLowerCase();
+                const excerpt = card.querySelector('.card-excerpt').textContent.toLowerCase();
+                const tags = Array.from(card.querySelectorAll('.tag-badge'))
+                    .map(tag => tag.textContent.toLowerCase());
+                const source = card.querySelector('.source-info span')?.textContent.toLowerCase() || '';
+                
+                const matches = title.includes(normalizedSearch) ||
+                    excerpt.includes(normalizedSearch) ||
+                    tags.some(tag => tag.includes(normalizedSearch)) ||
+                    source.includes(normalizedSearch);
+                
+                card.style.display = matches ? 'flex' : 'none';
+            });
+        };
+
+        // Make showOptions available globally
+        window.showOptions = function(docId, event) {
+            event.stopPropagation();
+            // Implement your options menu logic here
+            console.log('Show options for document:', docId);
+        };
+    </script>
   </body>
 </html>

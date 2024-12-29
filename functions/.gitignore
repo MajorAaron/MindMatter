@@ -12,3 +12,6 @@ node_modules/
 .env
 .env.local
 .env.*
+
+# Service account key file
+service-account-key.json

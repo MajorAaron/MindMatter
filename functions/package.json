@@ -7,7 +7,9 @@
     "shell": "firebase functions:shell",
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
+    "logs": "firebase functions:log",
+    "copy-prod-data": "node copy-prod-to-emulator.js",
+    "emulate-with-prod": "npm run copy-prod-data && firebase emulators:start"
   },
   "engines": {
     "node": "18"

@@ -8,6 +8,7 @@ import * as cheerio from 'cheerio';
 import express from 'express';
 import FormData from 'form-data';
 import Mailgun from 'mailgun.js';
+import { generateSummaryHTML } from './email-template.js';
 
 const app = express();
 app.set('view engine', 'html');
@@ -64,18 +65,7 @@ export const sendDailySummaryHttp = onRequest({
         const snapshot = await query.get();
         logger.info('Query executed with results:', {
             isEmpty: snapshot.empty,
-            size: snapshot.size,
-            docs: snapshot.docs.map(doc => {
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    timeAdded: data.timeAdded,
-                    timeAddedDate: data.timeAdded ? new Date(data.timeAdded * 1000).toLocaleString() : 'No date',
-                    title: data.title || data.given_title,
-                    url: data.url || data.given_url,
-                    allFields: Object.keys(data)
-                };
-            })
+            size: snapshot.size
         });
 
         if (snapshot.empty) {
@@ -84,36 +74,26 @@ export const sendDailySummaryHttp = onRequest({
             return;
         }
 
-        // Build the email HTML content
-        let htmlContent = '<h2>Your MindMatter Summary</h2>';
-        htmlContent += '<h3>Last 10 saved articles:</h3>';
-        
-        snapshot.forEach(doc => {
-            const article = doc.data();
-            htmlContent += `
-                <div style="margin-bottom: 20px; padding: 15px; border: 1px solid #eee; border-radius: 5px;">
-                    <h4 style="margin: 0 0 10px 0;">
-                        <a href="${article.given_url}" style="color: #4285f4; text-decoration: none;">
-                            ${article.given_title || 'Untitled'}
-                        </a>
-                    </h4>
-                    ${article.excerpt ? `<p style="color: #666; margin: 10px 0;">${article.excerpt}</p>` : ''}
-                    <div style="color: #888; font-size: 12px;">
-                        ${article.source ? `From: ${article.source}` : ''}
-                        ${article.timeAdded ? `<br>Added: ${new Date(article.timeAdded * 1000).toLocaleString('en-US', {
-                            timeZone: 'America/Denver',
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                            hour: 'numeric',
-                            minute: '2-digit',
-                            hour12: true
-                        })}` : ''}
-                    </div>
-                </div>
-            `;
+        // Convert documents to the format expected by generateSummaryHTML
+        const articles = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                title: data.title || data.given_title,
+                excerpt: data.excerpt,
+                url: data.url || data.given_url,
+                timeAdded: data.timeAdded,
+                topImage: data.topImage,
+                source: data.source
+            };
         });
 
+        // Generate email HTML using our template
+        const htmlContent = generateSummaryHTML(articles, {
+            isEmail: true,
+            timeframe: 'daily'
+        });
+        
         logger.info('Preparing email message...');
         
         const msg = {
