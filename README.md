@@ -20,3 +20,6 @@ A web application that allows you to manage saved articles from Pocket. Built wi
 - HTML/CSS
 
 ## Project Structure
+
+
+to seed the db call  cd functions && FIRESTORE_EMULATOR_HOST="localhost:8081" node seed.js
