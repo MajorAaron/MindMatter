@@ -1,5 +1,5 @@
 import { initializeApp, applicationDefault } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { onRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions/v2';
@@ -54,11 +54,11 @@ export const sendDailySummaryHttp = onRequest({
         });
         
         const query = articlesRef
-            .orderBy('timeAdded', 'desc')
+            .orderBy('timestamp', 'desc')
             .limit(10);
         logger.info('Query built with params:', {
             collection: 'saved_articles',
-            orderBy: 'timeAdded',
+            orderBy: 'timestamp',
             limit: 10
         });
         
@@ -82,7 +82,7 @@ export const sendDailySummaryHttp = onRequest({
                 title: data.title || data.given_title,
                 excerpt: data.excerpt,
                 url: data.url || data.given_url,
-                timeAdded: data.timeAdded,
+                timeAdded: data.timestamp,
                 topImage: data.topImage,
                 source: data.source
             };
@@ -122,15 +122,131 @@ export const sendDailySummaryHttp = onRequest({
     }
 });
 
-/* Keeping this commented out for future scheduling implementation
-export const sendDailySummary = onSchedule({
-    schedule: '0 9 * * *',
+// Morning summary scheduled function
+export const sendMorningSummary = onSchedule({
+    schedule: '0 8 * * *',  // 8:00 AM every day
     timeZone: 'America/Denver',
     secrets: ['MAILGUN_API_KEY']
 }, async (event) => {
-    // ... same implementation as above ...
+    try {
+        logger.info('Starting morning summary execution...');
+        
+        // Initialize Mailgun client with secret
+        const mg = mailgun.client({
+            username: 'api',
+            key: process.env.MAILGUN_API_KEY
+        });
+        
+        // Query Firestore for the last 10 articles
+        const articlesRef = firestore.collection('saved_articles');
+        const snapshot = await articlesRef
+            .orderBy('timestamp', 'desc')
+            .limit(10)
+            .get();
+
+        if (snapshot.empty) {
+            logger.info('No articles found for morning summary');
+            return;
+        }
+
+        // Convert documents to the format expected by generateSummaryHTML
+        const articles = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                title: data.title || data.given_title,
+                excerpt: data.excerpt,
+                url: data.url || data.given_url,
+                timeAdded: data.timestamp,
+                topImage: data.topImage,
+                source: data.source
+            };
+        });
+
+        // Generate email HTML
+        const htmlContent = generateSummaryHTML(articles, {
+            isEmail: true,
+            timeframe: 'Morning'
+        });
+        
+        const msg = {
+            from: 'MindMatter <mindmatter@mindmatter.app>',
+            to: 'aaron265@gmail.com',
+            subject: `MindMatter Morning Summary - ${new Date().toLocaleDateString()}`,
+            html: htmlContent
+        };
+
+        await mg.messages.create('mindmatter.app', msg);
+        logger.info('Morning summary email sent successfully');
+
+    } catch (error) {
+        logger.error('Error sending morning summary:', error);
+        throw error;
+    }
 });
-*/
+
+// Evening summary scheduled function
+export const sendEveningSummary = onSchedule({
+    schedule: '0 20 * * *',  // 8:00 PM every day
+    timeZone: 'America/Denver',
+    secrets: ['MAILGUN_API_KEY']
+}, async (event) => {
+    try {
+        logger.info('Starting evening summary execution...');
+        
+        // Initialize Mailgun client with secret
+        const mg = mailgun.client({
+            username: 'api',
+            key: process.env.MAILGUN_API_KEY
+        });
+        
+        // Query Firestore for the last 10 articles
+        const articlesRef = firestore.collection('saved_articles');
+        const snapshot = await articlesRef
+            .orderBy('timestamp', 'desc')
+            .limit(10)
+            .get();
+
+        if (snapshot.empty) {
+            logger.info('No articles found for evening summary');
+            return;
+        }
+
+        // Convert documents to the format expected by generateSummaryHTML
+        const articles = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                title: data.title || data.given_title,
+                excerpt: data.excerpt,
+                url: data.url || data.given_url,
+                timeAdded: data.timestamp,
+                topImage: data.topImage,
+                source: data.source
+            };
+        });
+
+        // Generate email HTML
+        const htmlContent = generateSummaryHTML(articles, {
+            isEmail: true,
+            timeframe: 'Evening'
+        });
+        
+        const msg = {
+            from: 'MindMatter <mindmatter@mindmatter.app>',
+            to: 'aaron265@gmail.com',
+            subject: `MindMatter Evening Summary - ${new Date().toLocaleDateString()}`,
+            html: htmlContent
+        };
+
+        await mg.messages.create('mindmatter.app', msg);
+        logger.info('Evening summary email sent successfully');
+
+    } catch (error) {
+        logger.error('Error sending evening summary:', error);
+        throw error;
+    }
+});
 
 export const save_item_to_db = onRequest(async (req, res) => {
    res.set('Access-Control-Allow-Origin', '*');
@@ -164,6 +280,9 @@ export const save_item_to_db = onRequest(async (req, res) => {
      // If data is a string, try to parse it
      const documentData = typeof data === 'string' ? JSON.parse(data) : data;
 
+     // Add server timestamp
+     documentData.timestamp = FieldValue.serverTimestamp();
+
      // Log processed data
      logger.info('Processed data', {
        data: documentData,
@@ -192,8 +311,7 @@ export const save_item_to_db = onRequest(async (req, res) => {
        details: error.message
      });
    }
-
- });
+});
 
 export const fetch_article_image = onRequest(async (req, res) => {
     res.set('Access-Control-Allow-Origin', '*');

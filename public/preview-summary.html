@@ -56,6 +56,7 @@
             <option value="weekly">Weekly Summary</option>
         </select>
         <button onclick="refreshPreview()">Refresh Preview</button>
+        <button onclick="sendEmail()" style="background: #34a853;">Send Email</button>
     </div>
     <iframe id="preview" class="preview-frame"></iframe>
 
@@ -75,6 +76,45 @@
             }
         });
 
+        window.sendEmail = async function() {
+            try {
+                const button = document.querySelector('button[onclick="sendEmail()"]');
+                button.disabled = true;
+                button.textContent = 'Sending...';
+
+                const timeframe = document.getElementById('timeframe').value;
+                const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                const baseUrl = isLocalhost 
+                    ? 'http://127.0.0.1:5001/mindmatter-bfd38/us-central1'
+                    : 'https://us-central1-mindmatter-bfd38.cloudfunctions.net';
+
+                const response = await fetch(`${baseUrl}/sendDailySummaryHttp`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        timeframe: timeframe
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || 'Failed to send email');
+                }
+
+                const result = await response.json();
+                alert('Email sent successfully!');
+            } catch (error) {
+                console.error('Error sending email:', error);
+                alert('Failed to send email: ' + error.message);
+            } finally {
+                const button = document.querySelector('button[onclick="sendEmail()"]');
+                button.disabled = false;
+                button.textContent = 'Send Email';
+            }
+        };
+
         window.refreshPreview = async function() {
             try {
                 const timeframe = document.getElementById('timeframe').value;
@@ -82,7 +122,7 @@
                 // Get the most recent articles
                 const articles = await fetchArticles(db, {
                     limit: 10,
-                    orderBy: 'timeAdded',
+                    orderBy: 'timestamp',
                     orderDirection: 'desc'
                 });
 

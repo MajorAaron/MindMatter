@@ -25,6 +25,10 @@
     ],
     "rewrites": [
       {
+        "source": "/sendDailySummaryHttp",
+        "function": "sendDailySummaryHttp"
+      },
+      {
         "source": "/email-template.js",
         "destination": "/functions/email-template.js"
       },

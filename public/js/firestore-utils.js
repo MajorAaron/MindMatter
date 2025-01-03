@@ -14,10 +14,20 @@ export async function initializeFirestore() {
     return db;
 }
 
+export async function deleteArticle(db, articleId) {
+    try {
+        await db.collection('saved_articles').doc(articleId).delete();
+        return true;
+    } catch (error) {
+        console.error('Error deleting article:', error);
+        throw error;
+    }
+}
+
 export async function fetchArticles(db, options = {}) {
     const {
         limit = 10,
-        orderBy = 'timeAdded',
+        orderBy = 'timestamp',
         orderDirection = 'desc'
     } = options;
 
@@ -38,8 +48,8 @@ export async function fetchArticles(db, options = {}) {
                 title: data.title,
                 excerpt: data.excerpt,
                 url: data.url,
-                time: data.timeAdded,
-                time_added: data.timeAdded,
+                time: data.timestamp,
+                timeAdded: data.timestamp,
                 topImage: data.topImage,
                 source: data.source || extractDomain(data.url),
                 status: data.status,

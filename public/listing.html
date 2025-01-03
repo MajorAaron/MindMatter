@@ -47,9 +47,22 @@
 
         .document-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            grid-template-columns: repeat(3, 1fr);
             gap: 24px;
             padding: 20px 0;
+            grid-auto-flow: dense;
+        }
+
+        @media (max-width: 1200px) {
+            .document-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .document-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         .document-card {
@@ -60,11 +73,13 @@
             transition: transform 0.2s;
             display: flex;
             flex-direction: column;
+            height: fit-content;
         }
 
         .card-image {
             width: 100%;
-            height: 200px;
+            height: auto;
+            aspect-ratio: 16/9;
             background-size: cover;
             background-position: center;
         }
@@ -72,12 +87,24 @@
         .card-content {
             padding: 16px;
             flex: 1;
+            display: flex;
+            flex-direction: column;
         }
 
         .card-title {
             font-size: 18px;
             font-weight: 600;
             margin: 0 0 12px 0;
+            line-height: 1.4;
+        }
+
+        .card-title a {
+            color: #1a1a1a;
+            text-decoration: none;
+        }
+
+        .card-title a:hover {
+            color: #0066cc;
         }
 
         .card-excerpt {
@@ -85,6 +112,25 @@
             color: #666;
             margin: 0 0 16px 0;
             line-height: 1.5;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+        }
+
+        .tags-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .tag-badge {
+            background: #f0f2f5;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #666;
         }
 
         .card-source {
@@ -125,6 +171,39 @@
             background: #f8d7da;
             margin-top: 20px;
         }
+
+        /* Options menu styles */
+        .options-menu {
+            position: absolute;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            padding: 8px 0;
+            min-width: 150px;
+            z-index: 1000;
+        }
+
+        .options-menu-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            color: #333;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .options-menu-item:hover {
+            background-color: #f5f5f5;
+        }
+
+        .options-menu-item.delete {
+            color: #dc3545;
+        }
+
+        .options-menu-item.delete:hover {
+            background-color: #fdf2f3;
+        }
     </style>
   </head>
   <body>
@@ -142,20 +221,29 @@
         </div>
 
         <div id="documents" class="document-grid"></div>
+        <div id="optionsMenu" class="options-menu" style="display: none;"></div>
     </div>
     
     <script type="module">
-        import { initializeFirestore, fetchArticles } from './js/firestore-utils.js';
+        import { initializeFirestore, fetchArticles, deleteArticle } from './js/firestore-utils.js';
 
         // Global variables
         let db;
         const functionsBaseUrl = 'http://localhost:5001/mindmatter-bfd38/us-central1';
+        let currentOptionsMenu = null;
 
         // Initialize Firestore on page load
         document.addEventListener('DOMContentLoaded', async () => {
             try {
                 db = await initializeFirestore();
                 loadDocuments();
+
+                // Close options menu when clicking outside
+                document.addEventListener('click', (event) => {
+                    if (!event.target.closest('.options-button') && !event.target.closest('.options-menu')) {
+                        hideOptionsMenu();
+                    }
+                });
             } catch (error) {
                 console.error('Error initializing Firestore:', error);
                 showError('Error initializing Firestore: ' + error.message);
@@ -170,7 +258,7 @@
             try {
                 const articles = await fetchArticles(db, {
                     limit: 20,
-                    orderBy: 'timeAdded',
+                    orderBy: 'timestamp',
                     orderDirection: 'desc'
                 });
                 
@@ -180,10 +268,16 @@
                 }
 
                 documentsDiv.innerHTML = '';
+                
+                // Create a document fragment for better performance
+                const fragment = document.createDocumentFragment();
                 articles.forEach(article => {
                     const card = createArticleCard(article);
-                    documentsDiv.appendChild(card);
+                    fragment.appendChild(card);
                 });
+                
+                // Append all cards at once
+                documentsDiv.appendChild(fragment);
             } catch (error) {
                 showError('Error loading documents: ' + error.message);
                 console.error('Full error:', error);
@@ -294,15 +388,46 @@
 
         function formatTimestamp(time) {
             if (!time) return '';
-            const date = new Date(time._seconds * 1000);
-            return date.toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true
-            });
+            
+            // Handle Firestore Timestamp object
+            if (time && typeof time.toDate === 'function') {
+                return time.toDate().toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                });
+            }
+            
+            // Handle timestamp with _seconds property (legacy format)
+            if (time._seconds) {
+                const date = new Date(time._seconds * 1000);
+                return date.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                });
+            }
+            
+            // Handle regular Date object or timestamp
+            const date = new Date(time);
+            if (!isNaN(date.getTime())) {
+                return date.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                });
+            }
+            
+            return 'Invalid Date';
         }
 
         function showError(message) {
@@ -334,8 +459,49 @@
         // Make showOptions available globally
         window.showOptions = function(docId, event) {
             event.stopPropagation();
-            // Implement your options menu logic here
-            console.log('Show options for document:', docId);
+            
+            // Hide any existing menu
+            hideOptionsMenu();
+            
+            const optionsMenu = document.getElementById('optionsMenu');
+            optionsMenu.innerHTML = `
+                <div class="options-menu-item delete" onclick="deleteArticleHandler('${docId}')">
+                    <span>🗑️</span> Delete
+                </div>
+            `;
+            
+            // Position the menu next to the button
+            const button = event.target;
+            const rect = button.getBoundingClientRect();
+            optionsMenu.style.top = `${rect.bottom + window.scrollY + 5}px`;
+            optionsMenu.style.left = `${rect.left + window.scrollX - 120}px`; // Align right edge with button
+            optionsMenu.style.display = 'block';
+            
+            currentOptionsMenu = optionsMenu;
+        };
+
+        function hideOptionsMenu() {
+            if (currentOptionsMenu) {
+                currentOptionsMenu.style.display = 'none';
+            }
+        }
+
+        // Make deleteArticleHandler available globally
+        window.deleteArticleHandler = async function(docId) {
+            if (confirm('Are you sure you want to delete this article?')) {
+                try {
+                    await deleteArticle(db, docId);
+                    // Remove the card from the UI
+                    const card = document.querySelector(`[data-doc-id="${docId}"]`);
+                    if (card) {
+                        card.remove();
+                    }
+                    hideOptionsMenu();
+                } catch (error) {
+                    console.error('Error deleting article:', error);
+                    alert('Failed to delete article: ' + error.message);
+                }
+            }
         };
     </script>
   </body>

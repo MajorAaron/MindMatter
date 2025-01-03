@@ -91,16 +91,49 @@ export function generateSummaryHTML(articles, options = {}) {
 
     const formatDate = (timestamp) => {
         if (!timestamp) return '';
-        const date = new Date(timestamp * 1000);
-        return date.toLocaleDateString('en-US', {
-            timeZone: 'America/Denver',
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-        });
+        
+        // Handle Firestore Timestamp object
+        if (timestamp && typeof timestamp.toDate === 'function') {
+            return timestamp.toDate().toLocaleDateString('en-US', {
+                timeZone: 'America/Denver',
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
+        
+        // Handle timestamp with _seconds property (legacy format)
+        if (timestamp._seconds) {
+            const date = new Date(timestamp._seconds * 1000);
+            return date.toLocaleDateString('en-US', {
+                timeZone: 'America/Denver',
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
+        
+        // Handle regular Date object or timestamp
+        const date = new Date(timestamp);
+        if (!isNaN(date.getTime())) {
+            return date.toLocaleDateString('en-US', {
+                timeZone: 'America/Denver',
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
+        
+        return 'Invalid Date';
     };
 
     const getSourceInfo = (url) => {
