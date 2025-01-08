@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Save Article</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], 
+        input[type="url"],
+        textarea {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        button {
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+        .preview-image {
+            max-width: 300px;
+            margin-top: 10px;
+            display: none;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <h2>Test Save Article</h2>
+    
+    <div class="form-group">
+        <label for="title">Title:</label>
+        <input type="text" id="title" placeholder="Enter article title">
+    </div>
+
+    <div class="form-group">
+        <label for="excerpt">Description/Excerpt:</label>
+        <textarea id="excerpt" placeholder="Enter article description or excerpt"></textarea>
+    </div>
+
+    <div class="form-group">
+        <label for="url">Article URL:</label>
+        <input type="url" id="url" placeholder="Enter article URL">
+    </div>
+
+    <div class="form-group">
+        <label for="imageUrl">Image URL:</label>
+        <input type="url" id="imageUrl" placeholder="Enter image URL" 
+               onchange="previewImage(this.value)">
+        <img id="imagePreview" class="preview-image" alt="Preview">
+    </div>
+
+    <div class="form-group">
+        <label for="source">Source:</label>
+        <input type="text" id="source" placeholder="Enter article source">
+    </div>
+
+    <button onclick="testFunction()">Save Article</button>
+    <div id="result"></div>
+
+    <script>
+        function previewImage(url) {
+            const preview = document.getElementById('imagePreview');
+            if (url) {
+                preview.src = url;
+                preview.style.display = 'block';
+                preview.onerror = function() {
+                    preview.style.display = 'none';
+                    alert('Failed to load image preview');
+                };
+            } else {
+                preview.style.display = 'none';
+            }
+        }
+
+        async function testFunction() {
+            const testData = {
+                title: document.getElementById('title').value,
+                excerpt: document.getElementById('excerpt').value,
+                url: document.getElementById('url').value,
+                topImage: document.getElementById('imageUrl').value,
+                source: document.getElementById('source').value
+            };
+
+            try {
+                const response = await fetch('http://127.0.0.1:5001/mindmatter-bfd38/us-central1/save_item_to_db', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(testData)
+                });
+
+                const result = await response.json();
+                
+                // If save was successful, fetch the document from Firestore
+                if (result.docId) {
+                    const firestoreResponse = await fetch(`http://localhost:8080/v1/projects/mindmatter-bfd38/databases/(default)/documents/saved_articles/${result.docId}`);
+                    const firestoreData = await firestoreResponse.json();
+                    
+                    // Display both the API response and the Firestore document
+                    document.getElementById('result').textContent = JSON.stringify({
+                        apiResponse: result,
+                        savedDocument: firestoreData
+                    }, null, 2);
+                } else {
+                    document.getElementById('result').textContent = JSON.stringify(result, null, 2);
+                }
+            } catch (error) {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html> 

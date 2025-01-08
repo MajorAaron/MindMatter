@@ -70,3 +70,18 @@ node_modules/
 
 # Screenshots
 screenshots/
+
+# Firebase
+.firebase/
+firebase-debug.log
+*-debug.log
+.runtimeconfig.json
+
+# Service account keys
+functions/*service-account*.json
+functions/*.json.local
+
+# Dependencies
+node_modules/
+.env
+.env.local

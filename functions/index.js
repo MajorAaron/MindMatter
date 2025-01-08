@@ -1,5 +1,6 @@
 import { initializeApp, applicationDefault } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 import { onRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions/v2';
@@ -16,10 +17,111 @@ app.set('view engine', 'html');
 // Initialize Firebase Admin
 initializeApp({
     credential: applicationDefault(),
-    projectId: 'mindmatter-bfd38'
+    projectId: 'mindmatter-bfd38',
+    storageBucket: 'mindmatter-bfd38.appspot.com'
 });
 
 const firestore = getFirestore();
+const storage = getStorage();
+const bucket = storage.bucket();  // This will use the default bucket
+
+// Function to download and store image
+async function downloadAndStoreImage(imageUrl, articleId) {
+    try {
+        if (!imageUrl) return null;
+        
+        // Validate URL format
+        try {
+            new URL(imageUrl);
+        } catch (e) {
+            logger.warn('Invalid image URL format:', imageUrl);
+            return null;
+        }
+
+        // Clean up URL and ensure it's an image
+        const cleanUrl = imageUrl.split('?')[0]; // Remove query parameters
+        if (!cleanUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+            logger.warn('URL does not point to a supported image format:', cleanUrl);
+            return null;
+        }
+        
+        // Generate a unique filename with timestamp to avoid conflicts
+        const timestamp = Date.now();
+        const fileExtension = cleanUrl.split('.').pop().toLowerCase();
+        const fileName = `article-images/pocket_${articleId}_${timestamp}.${fileExtension}`;
+        
+        logger.info('Attempting to download image:', {
+            originalUrl: imageUrl,
+            cleanUrl: cleanUrl,
+            targetFile: fileName,
+            bucket: bucket.name
+        });
+
+        try {
+            // Download the image
+            const response = await fetch(cleanUrl);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+            }
+
+            // Verify content type
+            const contentType = response.headers.get('content-type');
+            if (!contentType?.startsWith('image/')) {
+                logger.warn('Content is not an image:', contentType);
+                return null;
+            }
+            
+            // Upload the image using a buffer
+            const buffer = await response.arrayBuffer();
+            const file = bucket.file(fileName);
+            
+            await file.save(Buffer.from(buffer), {
+                metadata: {
+                    contentType: contentType,
+                },
+                public: true
+            });
+            
+            // Make the file publicly accessible (this is a no-op in emulator)
+            await file.makePublic();
+            
+            logger.info('Successfully stored image:', {
+                fileName: fileName,
+                bucket: bucket.name
+            });
+
+            // Check if we're running in the emulator
+            const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true';
+            
+            let downloadUrl;
+            if (isEmulator) {
+                // For local development, use the emulator URL format
+                downloadUrl = `http://localhost:9199/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media`;
+                logger.info('Using emulator storage URL:', downloadUrl);
+            } else {
+                // Use the standard Firebase Storage URL format
+                downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media`;
+                logger.info('Using Firebase Storage URL:', downloadUrl);
+            }
+            
+            return downloadUrl;
+        } catch (uploadError) {
+            logger.error('Error uploading image:', {
+                error: uploadError.message,
+                fileName: fileName
+            });
+            return null;
+        }
+    } catch (error) {
+        logger.error('Error in downloadAndStoreImage:', {
+            error: error.message,
+            url: imageUrl,
+            articleId: articleId,
+            bucket: bucket.name
+        });
+        return null;
+    }
+}
 
 // Initialize Mailgun
 const mailgun = new Mailgun(FormData);
@@ -283,14 +385,26 @@ export const save_item_to_db = onRequest(async (req, res) => {
      // Add server timestamp
      documentData.timestamp = FieldValue.serverTimestamp();
 
+     // Generate a unique document ID
+     const docId = `pocket_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+     // If there's a top image URL, download and store it
+     if (documentData.topImage) {
+       logger.info('Downloading and storing image:', documentData.topImage);
+       const storedImageUrl = await downloadAndStoreImage(documentData.topImage, docId);
+       if (storedImageUrl) {
+         documentData.originalTopImage = documentData.topImage; // Store original URL as backup
+         documentData.topImage = storedImageUrl;
+       } else {
+         logger.warn('Failed to store image, keeping original URL:', documentData.topImage);
+       }
+     }
+
      // Log processed data
      logger.info('Processed data', {
        data: documentData,
        dataType: typeof documentData
      });
-
-     // Generate a unique document ID
-     const docId = `pocket_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
      // Save to Firestore
      await firestore

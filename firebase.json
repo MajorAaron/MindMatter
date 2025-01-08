@@ -45,15 +45,20 @@
     "firestore": {
       "port": 8080
     },
-    "hosting": {
-      "port": 5003
+    "storage": {
+      "port": 9199
     },
     "ui": {
-      "enabled": true,
-      "port": 4001
+      "port": 4000
     },
     "hub": {
-      "port": 4401
+      "port": 4400
+    },
+    "logging": {
+      "port": 4500
     }
+  },
+  "storage": {
+    "rules": "storage.rules"
   }
 }
