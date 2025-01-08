@@ -11,9 +11,6 @@ import FormData from 'form-data';
 import Mailgun from 'mailgun.js';
 import { generateSummaryHTML } from './email-template.js';
 
-const app = express();
-app.set('view engine', 'html');
-
 // Initialize Firebase Admin
 initializeApp({
     credential: applicationDefault(),
@@ -23,103 +20,124 @@ initializeApp({
 
 const firestore = getFirestore();
 const storage = getStorage();
-const bucket = storage.bucket();  // This will use the default bucket
+
+// Use the default bucket without domain verification
+const bucket = storage.bucket('mindmatter-bfd38');
+
+// Log storage information
+logger.info('Storage initialization:', {
+    defaultBucket: bucket.name,
+    projectId: 'mindmatter-bfd38'
+});
+
+// Function to ensure bucket exists
+async function ensureBucketExists() {
+    try {
+        const [exists] = await bucket.exists();
+        if (!exists) {
+            logger.info('Bucket does not exist, creating it...');
+            await bucket.create({
+                location: 'US',
+                storageClass: 'STANDARD'
+            });
+        }
+        logger.info('Bucket verified:', bucket.name);
+        
+        // Set public access
+        try {
+            await bucket.iam.setPolicy({
+                bindings: [
+                    {
+                        role: 'roles/storage.objectViewer',
+                        members: ['allUsers']
+                    }
+                ]
+            });
+            logger.info('Bucket public access configured');
+        } catch (policyError) {
+            logger.warn('Could not set bucket policy:', policyError.message);
+        }
+    } catch (error) {
+        logger.error('Error checking/creating bucket:', {
+            error: error.message,
+            bucketName: bucket.name
+        });
+        throw error;
+    }
+}
 
 // Function to download and store image
 async function downloadAndStoreImage(imageUrl, articleId) {
     try {
-        if (!imageUrl) return null;
-        
-        // Validate URL format
-        try {
-            new URL(imageUrl);
-        } catch (e) {
-            logger.warn('Invalid image URL format:', imageUrl);
+        if (!imageUrl) {
+            logger.warn('No image URL provided');
             return null;
         }
 
-        // Clean up URL and ensure it's an image
-        const cleanUrl = imageUrl.split('?')[0]; // Remove query parameters
-        if (!cleanUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
-            logger.warn('URL does not point to a supported image format:', cleanUrl);
-            return null;
-        }
+        // Ensure bucket exists before proceeding
+        await ensureBucketExists();
+
+        logger.info('Starting image download process', {
+            imageUrl,
+            articleId,
+            environment: process.env.FUNCTIONS_EMULATOR ? 'emulator' : 'production',
+            bucketName: bucket.name
+        });
         
-        // Generate a unique filename with timestamp to avoid conflicts
+        // Generate a unique filename
         const timestamp = Date.now();
-        const fileExtension = cleanUrl.split('.').pop().toLowerCase();
-        const fileName = `article-images/pocket_${articleId}_${timestamp}.${fileExtension}`;
-        
-        logger.info('Attempting to download image:', {
-            originalUrl: imageUrl,
-            cleanUrl: cleanUrl,
-            targetFile: fileName,
-            bucket: bucket.name
-        });
+        const fileName = `article-images/pocket_${articleId}_${timestamp}.jpg`;
+        const file = bucket.file(fileName);
 
-        try {
-            // Download the image
-            const response = await fetch(cleanUrl);
-            if (!response.ok) {
-                throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
-            }
-
-            // Verify content type
-            const contentType = response.headers.get('content-type');
-            if (!contentType?.startsWith('image/')) {
-                logger.warn('Content is not an image:', contentType);
-                return null;
-            }
-            
-            // Upload the image using a buffer
-            const buffer = await response.arrayBuffer();
-            const file = bucket.file(fileName);
-            
-            await file.save(Buffer.from(buffer), {
-                metadata: {
-                    contentType: contentType,
-                },
-                public: true
-            });
-            
-            // Make the file publicly accessible (this is a no-op in emulator)
-            await file.makePublic();
-            
-            logger.info('Successfully stored image:', {
-                fileName: fileName,
-                bucket: bucket.name
-            });
-
-            // Check if we're running in the emulator
-            const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true';
-            
-            let downloadUrl;
-            if (isEmulator) {
-                // For local development, use the emulator URL format
-                downloadUrl = `http://localhost:9199/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media`;
-                logger.info('Using emulator storage URL:', downloadUrl);
-            } else {
-                // Use the standard Firebase Storage URL format
-                downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media`;
-                logger.info('Using Firebase Storage URL:', downloadUrl);
-            }
-            
-            return downloadUrl;
-        } catch (uploadError) {
-            logger.error('Error uploading image:', {
-                error: uploadError.message,
-                fileName: fileName
-            });
-            return null;
+        // Download the image
+        const imageResponse = await fetch(imageUrl);
+        if (!imageResponse.ok) {
+            throw new Error(`Failed to fetch image: ${imageResponse.status} ${imageResponse.statusText}`);
         }
-    } catch (error) {
-        logger.error('Error in downloadAndStoreImage:', {
-            error: error.message,
-            url: imageUrl,
-            articleId: articleId,
-            bucket: bucket.name
+
+        const contentType = imageResponse.headers.get('content-type');
+        if (!contentType?.startsWith('image/')) {
+            throw new Error(`Invalid content type: ${contentType}`);
+        }
+
+        // Get the image data as a buffer
+        const imageBuffer = await imageResponse.arrayBuffer();
+
+        // Upload the image
+        await file.save(Buffer.from(imageBuffer), {
+            metadata: {
+                contentType: contentType,
+                metadata: {
+                    originalUrl: imageUrl,
+                    uploadedAt: new Date().toISOString()
+                }
+            }
         });
-        return null;
+
+        // Make the file publicly accessible
+        await file.makePublic();
+
+        // Get the public URL
+        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${encodeURIComponent(fileName)}`;
+        
+        logger.info('Successfully uploaded image', {
+            fileName,
+            publicUrl,
+            contentType,
+            bucketName: bucket.name
+        });
+
+        return publicUrl;
+    } catch (error) {
+        logger.error('Failed to process image:', {
+            error: error.message,
+            imageUrl,
+            articleId,
+            bucketName: bucket.name,
+            stack: error.stack
+        });
+        // Return the original URL if storage fails
+        return imageUrl;
     }
 }
 
@@ -350,7 +368,19 @@ export const sendEveningSummary = onSchedule({
     }
 });
 
-export const save_item_to_db = onRequest(async (req, res) => {
+export const save_item_to_db = onRequest({
+    cors: true,
+    ingressSettings: 'ALLOW_ALL',  // Allow incoming requests
+    invoker: 'public',
+    cpu: 1,
+    memory: '256MiB',
+    maxInstances: 10,
+    minInstances: 0,
+    timeoutSeconds: 60,
+    labels: {
+        type: 'article-save'
+    }
+}, async (req, res) => {
    res.set('Access-Control-Allow-Origin', '*');
    res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
    res.set('Access-Control-Allow-Headers', 'Content-Type');
@@ -390,13 +420,19 @@ export const save_item_to_db = onRequest(async (req, res) => {
 
      // If there's a top image URL, download and store it
      if (documentData.topImage) {
-       logger.info('Downloading and storing image:', documentData.topImage);
-       const storedImageUrl = await downloadAndStoreImage(documentData.topImage, docId);
-       if (storedImageUrl) {
+       try {
+         logger.info('Downloading and storing image:', documentData.topImage);
+         const storedImageUrl = await downloadAndStoreImage(documentData.topImage, docId);
          documentData.originalTopImage = documentData.topImage; // Store original URL as backup
          documentData.topImage = storedImageUrl;
-       } else {
-         logger.warn('Failed to store image, keeping original URL:', documentData.topImage);
+         logger.info('Successfully stored and updated image URL:', storedImageUrl);
+       } catch (imageError) {
+         logger.error('Failed to store image:', {
+           error: imageError.message,
+           originalUrl: documentData.topImage
+         });
+         // Keep the original image URL if storage fails
+         documentData.topImage = documentData.topImage;
        }
      }
 
