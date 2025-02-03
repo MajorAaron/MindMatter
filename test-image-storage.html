@@ -3,7 +3,7 @@
 <head>
     <title>Test Save Article</title>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-    <script src="js/config.js"></script>
+    <script src="src/js/config.js"></script>
     <style>
         body { 
             font-family: Arial, sans-serif; 
@@ -96,8 +96,13 @@
 
     <script>
         // Initialize Supabase client
-        const supabaseUrl = window.SUPABASE_URL || 'http://127.0.0.1:54321';
-        const supabaseKey = window.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
+        const supabaseUrl = window.SUPABASE_URL;
+        const supabaseKey = window.SUPABASE_ANON_KEY;
+        
+        if (!supabaseUrl || !supabaseKey) {
+            console.error('Supabase configuration is missing. Please check config.js');
+        }
+        
         const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
         function previewImage(url) {
@@ -124,8 +129,11 @@
                     image_url: document.getElementById('imageUrl').value
                 };
 
-                // Call the save-article function with the correct local URL
-                const response = await fetch(`${supabaseUrl}/functions/v1/save-article`, {
+                // Call the save-article function
+                const functionUrl = `${supabaseUrl}/functions/v1/save-article`;
+                console.log('Calling function:', functionUrl);
+                
+                const response = await fetch(functionUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -134,11 +142,12 @@
                     body: JSON.stringify(articleData)
                 });
 
-                const result = await response.json();
-
                 if (!response.ok) {
-                    throw new Error(result.error || 'Failed to save article');
+                    const errorText = await response.text();
+                    throw new Error(errorText || 'Failed to save article');
                 }
+
+                const result = await response.json();
 
                 // Display the result
                 document.getElementById('result').textContent = JSON.stringify(result, null, 2);
