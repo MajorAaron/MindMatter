@@ -5,10 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Saved Articles</title>
     
-    <!-- Firebase SDKs -->
-    <script defer src="/__/firebase/11.1.0/firebase-app-compat.js"></script>
-    <script defer src="/__/firebase/11.1.0/firebase-firestore-compat.js"></script>
-    <script defer src="/__/firebase/init.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
 
     <style>
         /* Keep your existing styles */
@@ -76,6 +74,11 @@
             height: fit-content;
         }
 
+        .document-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        }
+
         .card-image {
             width: 100%;
             height: auto;
@@ -118,21 +121,6 @@
             -webkit-box-orient: vertical;
         }
 
-        .tags-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-bottom: 16px;
-        }
-
-        .tag-badge {
-            background: #f0f2f5;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            color: #666;
-        }
-
         .card-source {
             font-size: 13px;
             color: #666;
@@ -148,12 +136,6 @@
             display: flex;
             align-items: center;
             gap: 6px;
-        }
-
-        .source-icon {
-            width: 16px;
-            height: 16px;
-            border-radius: 3px;
         }
 
         .options-button {
@@ -224,261 +206,108 @@
         <div id="optionsMenu" class="options-menu" style="display: none;"></div>
     </div>
     
-    <script type="module">
-        import { initializeFirestore, fetchArticles, deleteArticle } from './js/firestore-utils.js';
+    <script>
+        // Initialize Supabase client
+        const supabaseUrl = window.SUPABASE_URL || 'http://127.0.0.1:54321';
+        const supabaseKey = window.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-        // Global variables
-        let db;
-        const functionsBaseUrl = 'http://localhost:5001/mindmatter-bfd38/us-central1';
         let currentOptionsMenu = null;
+        let allArticles = [];
 
-        // Initialize Firestore on page load
-        document.addEventListener('DOMContentLoaded', async () => {
-            try {
-                db = await initializeFirestore();
-                loadDocuments();
+        function formatDate(dateString) {
+            const options = { year: 'numeric', month: 'short', day: 'numeric' };
+            return new Date(dateString).toLocaleDateString(undefined, options);
+        }
 
-                // Close options menu when clicking outside
-                document.addEventListener('click', (event) => {
-                    if (!event.target.closest('.options-button') && !event.target.closest('.options-menu')) {
-                        hideOptionsMenu();
-                    }
-                });
-            } catch (error) {
-                console.error('Error initializing Firestore:', error);
-                showError('Error initializing Firestore: ' + error.message);
-            }
-        });
+        function getImageUrl(storedImagePath) {
+            if (!storedImagePath) return null;
+            return `${supabaseUrl}/storage/v1/object/public/article-images/${storedImagePath}`;
+        }
 
-        // Load and display documents
         async function loadDocuments() {
-            const documentsDiv = document.getElementById('documents');
-            documentsDiv.innerHTML = 'Loading...';
-
             try {
-                const articles = await fetchArticles(db, {
-                    limit: 20,
-                    orderBy: 'timestamp',
-                    orderDirection: 'desc'
-                });
-                
-                if (articles.length === 0) {
-                    documentsDiv.innerHTML = 'No documents found in collection.';
-                    return;
+                const { data: articles, error } = await supabase
+                    .from('saved_articles')
+                    .select('*')
+                    .order('time_added', { ascending: false });
+
+                if (error) throw error;
+
+                allArticles = articles;
+                renderDocuments(articles);
+            } catch (error) {
+                console.error('Error loading articles:', error);
+                showError('Failed to load articles: ' + error.message);
+            }
+        }
+
+        function renderDocuments(articles) {
+            const container = document.getElementById('documents');
+            container.innerHTML = articles.map(article => `
+                <div class="document-card">
+                    ${article.stored_image_path ? 
+                        `<div class="card-image" style="background-image: url('${getImageUrl(article.stored_image_path)}')"></div>`
+                        : ''}
+                    <div class="card-content">
+                        <h2 class="card-title">
+                            <a href="${article.url}" target="_blank">${article.title}</a>
+                        </h2>
+                        <p class="card-excerpt">${article.excerpt}</p>
+                        <div class="card-source">
+                            <div class="source-info">
+                                <span>${article.source}</span>
+                                <span>•</span>
+                                <span>${formatDate(article.time_added)}</span>
+                            </div>
+                            <button class="options-button" onclick="showOptionsMenu(event, '${article.id}')">⋮</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function deleteArticle(id) {
+            try {
+                const { error } = await supabase
+                    .from('saved_articles')
+                    .delete()
+                    .eq('id', id);
+
+                if (error) throw error;
+
+                // Remove from UI
+                const index = allArticles.findIndex(article => article.id === id);
+                if (index !== -1) {
+                    allArticles.splice(index, 1);
+                    renderDocuments(allArticles);
                 }
 
-                documentsDiv.innerHTML = '';
-                
-                // Create a document fragment for better performance
-                const fragment = document.createDocumentFragment();
-                articles.forEach(article => {
-                    const card = createArticleCard(article);
-                    fragment.appendChild(card);
-                });
-                
-                // Append all cards at once
-                documentsDiv.appendChild(fragment);
+                hideOptionsMenu();
             } catch (error) {
-                showError('Error loading documents: ' + error.message);
-                console.error('Full error:', error);
+                console.error('Error deleting article:', error);
+                showError('Failed to delete article: ' + error.message);
             }
         }
 
-        // Helper function to create article cards
-        function createArticleCard(article) {
-            const card = document.createElement('div');
-            card.className = 'document-card';
-            card.setAttribute('data-doc-id', article.id);
-            
-            // Create image container
-            const imageContainer = document.createElement('div');
-            imageContainer.className = 'card-image';
-            
-            // Set background image if available
-            if (article.topImage) {
-                imageContainer.style.backgroundImage = `url('${article.topImage}')`;
-            } else {
-                // Try to fetch image if not available
-                fetch(`${functionsBaseUrl}/fetch_article_image?url=${encodeURIComponent(article.url)}`)
-                    .then(response => response.json())
-                    .then(async (imageData) => {
-                        if (imageData.imageUrl) {
-                            imageContainer.style.backgroundImage = `url('${imageData.imageUrl}')`;
-                            try {
-                                await db.collection('saved_articles').doc(article.id).update({
-                                    topImage: imageData.imageUrl
-                                });
-                                console.log('Image URL stored in Firestore');
-                            } catch (error) {
-                                console.error('Error storing image URL:', error);
-                            }
-                        }
-                    })
-                    .catch(console.error);
-            }
-            
-            card.appendChild(imageContainer);
-            
-            // Create content container
-            const contentContainer = document.createElement('div');
-            contentContainer.className = 'card-content';
-            
-            // Create card HTML
-            contentContainer.innerHTML = `
-                <h2 class="card-title">
-                    <a href="${article.url}" target="_blank" rel="noopener noreferrer">
-                        ${article.title || 'Untitled'}
-                    </a>
-                </h2>
-                <p class="card-excerpt">${article.excerpt || 'No excerpt available'}</p>
-                ${article.tags ? `
-                    <div class="tags-container">
-                        ${typeof article.tags === 'string' 
-                            ? article.tags.split(',')
-                                .map(tag => tag.trim())
-                                .filter(tag => tag)
-                                .map(tag => `
-                                    <span class="tag-badge">${tag}</span>
-                                `).join('')
-                            : Array.isArray(article.tags) 
-                                ? article.tags
-                                    .filter(tag => tag && tag.trim())
-                                    .map(tag => `
-                                        <span class="tag-badge">${tag.trim()}</span>
-                                    `).join('')
-                                : ''
-                        }
-                    </div>
-                ` : ''}
-                <div class="card-source">
-                    <div class="source-info">
-                        ${article.url ? `
-                            ${(() => {
-                                const domain = extractDomain(article.url);
-                                return `
-                                    <img class="source-icon" 
-                                        src="https://www.google.com/s2/favicons?domain=${domain}&sz=32" 
-                                        alt="${domain} icon"
-                                        onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>';">
-                                    <span>${domain}</span>
-                                `;
-                            })()}
-                        ` : ''}
-                    </div>
-                    <div class="card-metadata">
-                        <span class="timestamp">${formatTimestamp(article.time)}</span>
-                        <button class="options-button" onclick="showOptions('${article.id}', event)">⋮</button>
-                    </div>
-                </div>
-            `;
-            
-            card.appendChild(contentContainer);
-            return card;
-        }
-
-        // Helper functions
-        function extractDomain(url) {
-            try {
-                const urlObj = new URL(url);
-                return urlObj.hostname.replace('www.', '');
-            } catch {
-                return 'Unknown Source';
-            }
-        }
-
-        function formatTimestamp(time) {
-            if (!time) return '';
-            
-            // Handle Firestore Timestamp object
-            if (time && typeof time.toDate === 'function') {
-                return time.toDate().toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    hour12: true
-                });
-            }
-            
-            // Handle timestamp with _seconds property (legacy format)
-            if (time._seconds) {
-                const date = new Date(time._seconds * 1000);
-                return date.toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    hour12: true
-                });
-            }
-            
-            // Handle regular Date object or timestamp
-            const date = new Date(time);
-            if (!isNaN(date.getTime())) {
-                return date.toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    hour12: true
-                });
-            }
-            
-            return 'Invalid Date';
-        }
-
-        function showError(message) {
-            const documentsDiv = document.getElementById('documents');
-            documentsDiv.innerHTML = `<div class="error-message">${message}</div>`;
-        }
-
-        // Make search function available globally
-        window.searchDocuments = function(searchTerm) {
-            const cards = document.querySelectorAll('.document-card');
-            const normalizedSearch = searchTerm.toLowerCase().trim();
-            
-            cards.forEach(card => {
-                const title = card.querySelector('.card-title').textContent.toLowerCase();
-                const excerpt = card.querySelector('.card-excerpt').textContent.toLowerCase();
-                const tags = Array.from(card.querySelectorAll('.tag-badge'))
-                    .map(tag => tag.textContent.toLowerCase());
-                const source = card.querySelector('.source-info span')?.textContent.toLowerCase() || '';
-                
-                const matches = title.includes(normalizedSearch) ||
-                    excerpt.includes(normalizedSearch) ||
-                    tags.some(tag => tag.includes(normalizedSearch)) ||
-                    source.includes(normalizedSearch);
-                
-                card.style.display = matches ? 'flex' : 'none';
-            });
-        };
-
-        // Make showOptions available globally
-        window.showOptions = function(docId, event) {
+        function showOptionsMenu(event, articleId) {
             event.stopPropagation();
-            
-            // Hide any existing menu
             hideOptionsMenu();
-            
-            const optionsMenu = document.getElementById('optionsMenu');
-            optionsMenu.innerHTML = `
-                <div class="options-menu-item delete" onclick="deleteArticleHandler('${docId}')">
-                    <span>🗑️</span> Delete
+
+            const menu = document.getElementById('optionsMenu');
+            menu.innerHTML = `
+                <div class="options-menu-item delete" onclick="deleteArticle('${articleId}')">
+                    Delete
                 </div>
             `;
-            
-            // Position the menu next to the button
+
             const button = event.target;
             const rect = button.getBoundingClientRect();
-            optionsMenu.style.top = `${rect.bottom + window.scrollY + 5}px`;
-            optionsMenu.style.left = `${rect.left + window.scrollX - 120}px`; // Align right edge with button
-            optionsMenu.style.display = 'block';
-            
-            currentOptionsMenu = optionsMenu;
-        };
+            menu.style.top = `${rect.bottom + window.scrollY + 5}px`;
+            menu.style.left = `${rect.left + window.scrollX - 100}px`;
+            menu.style.display = 'block';
+            currentOptionsMenu = menu;
+        }
 
         function hideOptionsMenu() {
             if (currentOptionsMenu) {
@@ -486,23 +315,30 @@
             }
         }
 
-        // Make deleteArticleHandler available globally
-        window.deleteArticleHandler = async function(docId) {
-            if (confirm('Are you sure you want to delete this article?')) {
-                try {
-                    await deleteArticle(db, docId);
-                    // Remove the card from the UI
-                    const card = document.querySelector(`[data-doc-id="${docId}"]`);
-                    if (card) {
-                        card.remove();
-                    }
-                    hideOptionsMenu();
-                } catch (error) {
-                    console.error('Error deleting article:', error);
-                    alert('Failed to delete article: ' + error.message);
-                }
+        function searchDocuments(query) {
+            const searchTerm = query.toLowerCase();
+            const filtered = allArticles.filter(article => 
+                article.title.toLowerCase().includes(searchTerm) ||
+                article.excerpt.toLowerCase().includes(searchTerm) ||
+                article.source.toLowerCase().includes(searchTerm)
+            );
+            renderDocuments(filtered);
+        }
+
+        function showError(message) {
+            const container = document.getElementById('documents');
+            container.innerHTML = `<div class="error-message">${message}</div>`;
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', loadDocuments);
+
+        // Close options menu when clicking outside
+        document.addEventListener('click', (event) => {
+            if (!event.target.closest('.options-button') && !event.target.closest('.options-menu')) {
+                hideOptionsMenu();
             }
-        };
+        });
     </script>
   </body>
 </html>

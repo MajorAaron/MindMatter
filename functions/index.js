@@ -10,6 +10,7 @@ import express from 'express';
 import FormData from 'form-data';
 import Mailgun from 'mailgun.js';
 import { generateSummaryHTML } from './email-template.js';
+import supabase from '../supabaseClient.js';
 
 // Initialize Firebase Admin
 initializeApp({
@@ -74,20 +75,15 @@ async function downloadAndStoreImage(imageUrl, articleId) {
             return null;
         }
 
-        // Ensure bucket exists before proceeding
-        await ensureBucketExists();
-
         logger.info('Starting image download process', {
             imageUrl,
             articleId,
-            environment: process.env.FUNCTIONS_EMULATOR ? 'emulator' : 'production',
-            bucketName: bucket.name
+            environment: process.env.FUNCTIONS_EMULATOR ? 'emulator' : 'production'
         });
-        
+
         // Generate a unique filename
         const timestamp = Date.now();
         const fileName = `article-images/pocket_${articleId}_${timestamp}.jpg`;
-        const file = bucket.file(fileName);
 
         // Download the image
         const imageResponse = await fetch(imageUrl);
@@ -96,44 +92,45 @@ async function downloadAndStoreImage(imageUrl, articleId) {
         }
 
         const contentType = imageResponse.headers.get('content-type');
-        if (!contentType?.startsWith('image/')) {
+        if (!contentType || !contentType.startsWith('image/')) {
             throw new Error(`Invalid content type: ${contentType}`);
         }
 
         // Get the image data as a buffer
         const imageBuffer = await imageResponse.arrayBuffer();
 
-        // Upload the image
-        await file.save(Buffer.from(imageBuffer), {
-            metadata: {
-                contentType: contentType,
-                metadata: {
-                    originalUrl: imageUrl,
-                    uploadedAt: new Date().toISOString()
-                }
-            }
-        });
+        // Upload image to Supabase Storage bucket named 'article-images'
+        const { error: uploadError } = await supabase
+            .storage
+            .from('article-images')
+            .upload(fileName, Buffer.from(imageBuffer), { contentType });
 
-        // Make the file publicly accessible
-        await file.makePublic();
+        if (uploadError) {
+            throw new Error(uploadError.message);
+        }
 
-        // Get the public URL
-        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${encodeURIComponent(fileName)}`;
-        
+        // Get the public URL for the file
+        const { publicURL, error: urlError } = supabase
+            .storage
+            .from('article-images')
+            .getPublicUrl(fileName);
+
+        if (urlError) {
+            throw new Error(urlError.message);
+        }
+
         logger.info('Successfully uploaded image', {
             fileName,
-            publicUrl,
-            contentType,
-            bucketName: bucket.name
+            publicUrl: publicURL,
+            contentType
         });
 
-        return publicUrl;
+        return publicURL;
     } catch (error) {
         logger.error('Failed to process image:', {
             error: error.message,
             imageUrl,
             articleId,
-            bucketName: bucket.name,
             stack: error.stack
         });
         // Return the original URL if storage fails

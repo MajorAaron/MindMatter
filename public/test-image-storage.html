@@ -2,6 +2,8 @@
 <html>
 <head>
     <title>Test Save Article</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
     <style>
         body { 
             font-family: Arial, sans-serif; 
@@ -89,18 +91,14 @@
         <input type="text" id="source" placeholder="Enter article source">
     </div>
 
-    <button onclick="testFunction()">Save Article</button>
+    <button onclick="saveArticle()">Save Article</button>
     <div id="result"></div>
 
     <script>
-        // Determine if we're running locally or in production
-        const isLocalhost = window.location.hostname === 'localhost' || 
-                          window.location.hostname === '127.0.0.1';
-        
-        // Set the appropriate API URL for the Cloud Function
-        const API_URL = isLocalhost
-            ? 'http://127.0.0.1:5001/mindmatter-bfd38/us-central1/save_item_to_db'
-            : 'https://save-item-to-db-lisanrfdsa-uc.a.run.app';
+        // Initialize Supabase client
+        const supabaseUrl = window.SUPABASE_URL || 'http://127.0.0.1:54321';
+        const supabaseKey = window.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
         function previewImage(url) {
             const preview = document.getElementById('imagePreview');
@@ -116,49 +114,41 @@
             }
         }
 
-        async function testFunction() {
-            const testData = {
-                title: document.getElementById('title').value,
-                excerpt: document.getElementById('excerpt').value,
-                url: document.getElementById('url').value,
-                topImage: document.getElementById('imageUrl').value,
-                source: document.getElementById('source').value
-            };
-
+        async function saveArticle() {
             try {
-                // First, save the article
-                const response = await fetch(API_URL, {
+                const articleData = {
+                    url: document.getElementById('url').value,
+                    title: document.getElementById('title').value,
+                    excerpt: document.getElementById('excerpt').value,
+                    source: document.getElementById('source').value,
+                    image_url: document.getElementById('imageUrl').value
+                };
+
+                // Call the save-article function with the correct local URL
+                const response = await fetch(`${supabaseUrl}/functions/v1/save-article`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${supabaseKey}`
                     },
-                    body: JSON.stringify(testData)
+                    body: JSON.stringify(articleData)
                 });
 
                 const result = await response.json();
-                
-                // If save was successful, fetch the document from production Firestore
-                if (result.docId) {
-                    // Always use production Firestore URL
-                    const firestoreUrl = `https://firestore.googleapis.com/v1/projects/mindmatter-bfd38/databases/(default)/documents/saved_articles/${result.docId}`;
-                    
-                    const firestoreResponse = await fetch(firestoreUrl);
-                    if (!firestoreResponse.ok) {
-                        throw new Error(`Failed to fetch Firestore document: ${firestoreResponse.status}`);
-                    }
-                    const firestoreData = await firestoreResponse.json();
-                    
-                    // Display both the API response and the Firestore document
-                    document.getElementById('result').textContent = JSON.stringify({
-                        apiResponse: result,
-                        savedDocument: firestoreData
-                    }, null, 2);
-                } else {
-                    document.getElementById('result').textContent = JSON.stringify(result, null, 2);
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to save article');
                 }
+
+                // Display the result
+                document.getElementById('result').textContent = JSON.stringify(result, null, 2);
+
             } catch (error) {
-                document.getElementById('result').textContent = 'Error: ' + error.message;
-                console.error('Full error:', error);
+                document.getElementById('result').textContent = JSON.stringify({
+                    success: false,
+                    error: error.message
+                }, null, 2);
+                console.error('Error:', error);
             }
         }
     </script>
