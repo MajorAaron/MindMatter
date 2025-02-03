@@ -1,7 +1,3 @@
--- Create a bucket for article images
-insert into storage.buckets (id, name, public)
-values ('article-images', 'article-images', true);
-
 -- Set up security policies for the bucket
 create policy "Public Access"
   on storage.objects for select
