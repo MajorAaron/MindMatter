@@ -1,17 +1,22 @@
 {
   "name": "mindmatter",
-  "version": "1.0.0",
+  "private": true,
+  "version": "0.0.0",
   "description": "MindMatter project migrated to Supabase and Netlify",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.48.1",
+    "@supabase/supabase-js": "^2.39.3",
     "dotenv": "^16.4.7",
     "express": "^4.18.2",
     "firebase-admin": "^13.0.2",
     "node-fetch": "^3.0.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.8"
   }
 }

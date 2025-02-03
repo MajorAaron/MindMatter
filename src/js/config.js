@@ -1,0 +1,3 @@
+// Supabase Configuration
+window.SUPABASE_URL = 'https://rmcxscrhdqkzenqcsaow.supabase.co';
+window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtY3hzY3JoZHFremVucWNzYW93Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg1NTIwMDYsImV4cCI6MjA1NDEyODAwNn0.uC_ZIUKPyvUS2gdgBVIXCuX0u22xLghddTEPrixPsJc'; 
