@@ -129,15 +129,16 @@
                     image_url: document.getElementById('imageUrl').value
                 };
 
-                // Call the save-article function
+                // Call the save-article function using the correct Supabase Edge Function URL
                 const functionUrl = `${supabaseUrl}/functions/v1/save-article`;
-                console.log('Calling function:', functionUrl);
+                console.log('Calling Supabase Edge Function:', functionUrl);
                 
                 const response = await fetch(functionUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${supabaseKey}`
+                        'Authorization': `Bearer ${supabaseKey}`,
+                        'apikey': supabaseKey
                     },
                     body: JSON.stringify(articleData)
                 });
