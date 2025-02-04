@@ -130,7 +130,7 @@
                 };
 
                 // Call the save-article function using the correct Supabase Edge Function URL
-                const functionUrl = 'https://rmcxscrhdqkzenqcsaow.functions.supabase.co/v1/save-article';
+                const functionUrl = 'https://rmcxscrhdqkzenqcsaow.supabase.co/functions/v1/save-article';
                 console.log('Calling Supabase Edge Function:', functionUrl);
                 
                 const response = await fetch(functionUrl, {
